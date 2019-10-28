@@ -378,3 +378,12 @@ IRC
 bitmasks
 CSPRNG
 lexicographically
+SIGHASH
+ANYONECANPAY
+cpfp
+utxo
+txes
+csv
+CHECKSIGVERIFY
+IFDUP
+sats

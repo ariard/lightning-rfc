@@ -117,11 +117,41 @@ If a revoked commitment transaction is published, the other party can spend this
 
 #### `to_remote` Output
 
-This output sends funds to the other peer and thus is a simple P2WPKH to `remotepubkey`.
+If `option_anchor_outputs` applies to the commitment transaction, the `to_remote` output is encumbered by a one block csv lock.
+
+    <remote_pubkey> OP_CHECKSIGVERIFY 1 OP_CHECKSEQUENCEVERIFY
+
+The output is spent by a transaction with `nSequence` field set to `1` and witness:
+
+    <remote_sig>
+
+Otherwise, this output is a simple P2WPKH to `remotepubkey`.
+
+#### `to_local_anchor` and `to_remote_anchor` Output (option_anchor_outputs)
+
+This output can be spent by the local and remote nodes respectively to provide incentive to mine the transaction, using child-pays-for-parent. Both
+anchor outputs are always added, except for the case where there are no htlcs and one of the parties has a commitment output that is below the dust limit. 
+In that case only an anchor is added for the commitment output that does materialize. This typically happens if the initiator closes right after opening
+(no `to_remote` output).
+
+    <local_funding_pubkey/remote_funding_pubkey> OP_CHECKSIG OP_IFDUP
+    OP_NOTIF
+        OP_16 OP_CHECKSEQUENCEVERIFY
+    OP_ENDIF
+
+Each party has its own anchor output that locks to their funding key. This is to prevent a malicious peer from attaching child transactions with a low fee
+density to an anchor and thereby blocking the victim from getting the commit tx confirmed in time. This defense is supported by a change in Bitcoin core 0.19:
+https://github.com/bitcoin/bitcoin/pull/15681. This is also the reason that every non-anchor output on the commit tx is CSV locked.
+
+To prevent utxo set pollution, any anchor that remains unspent can be spent by anyone after the commitment tx confirms. This is also the reason to lock
+the anchor outputs to the funding key. Third parties can observe this key and reconstruct the spend script, even if none of the commitment outputs would
+be spent.
+
+The size of the output is fixed at 330 sats, the default dust limit for P2WSH.
 
 #### Offered HTLC Outputs
 
-This output sends funds to either an HTLC-timeout transaction after the HTLC-timeout or to the remote node using the payment preimage or the revocation key. The output is a P2WSH, with a witness script:
+This output sends funds to either an HTLC-timeout transaction after the HTLC-timeout or to the remote node using the payment preimage or the revocation key. The output is a P2WSH, with a witness script (no option_anchor_outputs):
 
     # To remote node with revocation key
     OP_DUP OP_HASH160 <RIPEMD160(SHA256(revocationpubkey))> OP_EQUAL
@@ -139,6 +169,25 @@ This output sends funds to either an HTLC-timeout transaction after the HTLC-tim
         OP_ENDIF
     OP_ENDIF
 
+Or, with `option_anchor_outputs`:
+
+    # To remote node with revocation key
+    OP_DUP OP_HASH160 <RIPEMD160(SHA256(revocationpubkey))> OP_EQUAL
+    OP_IF
+        OP_CHECKSIG
+    OP_ELSE
+        <remote_htlcpubkey> OP_SWAP OP_SIZE 32 OP_EQUAL
+        OP_NOTIF
+            # To local node via HTLC-timeout transaction (timelocked).
+            OP_DROP 2 OP_SWAP <local_htlcpubkey> 2 OP_CHECKMULTISIG
+        OP_ELSE
+            # To remote node with preimage.
+            OP_HASH160 <RIPEMD160(payment_hash)> OP_EQUALVERIFY
+            OP_CHECKSIG
+        OP_ENDIF
+        1 OP_CHECKSEQUENCEVERIFY OP_DROP
+    OP_ENDIF
+
 The remote node can redeem the HTLC with the witness:
 
     <remotehtlcsig> <payment_preimage>
@@ -151,7 +200,7 @@ The sending node can use the HTLC-timeout transaction to timeout the HTLC once t
 
 #### Received HTLC Outputs
 
-This output sends funds to either the remote node after the HTLC-timeout or using the revocation key, or to an HTLC-success transaction with a successful payment preimage. The output is a P2WSH, with a witness script:
+This output sends funds to either the remote node after the HTLC-timeout or using the revocation key, or to an HTLC-success transaction with a successful payment preimage. The output is a P2WSH, with a witness script (no `option_anchor_outputs`):
 
     # To remote node with revocation key
     OP_DUP OP_HASH160 <RIPEMD160(SHA256(revocationpubkey))> OP_EQUAL
@@ -168,6 +217,26 @@ This output sends funds to either the remote node after the HTLC-timeout or usin
             OP_DROP <cltv_expiry> OP_CHECKLOCKTIMEVERIFY OP_DROP
             OP_CHECKSIG
         OP_ENDIF
+    OP_ENDIF
+
+Or, with `option_anchor_outputs`:
+
+    # To remote node with revocation key
+    OP_DUP OP_HASH160 <RIPEMD160(SHA256(revocationpubkey))> OP_EQUAL
+    OP_IF
+        OP_CHECKSIG
+    OP_ELSE
+        <remote_htlcpubkey> OP_SWAP OP_SIZE 32 OP_EQUAL
+        OP_IF
+            # To local node via HTLC-success transaction.
+            OP_HASH160 <RIPEMD160(payment_hash)> OP_EQUALVERIFY
+            2 OP_SWAP <local_htlcpubkey> 2 OP_CHECKMULTISIG
+        OP_ELSE
+            # To remote node after timeout.
+            OP_DROP <cltv_expiry> OP_CHECKLOCKTIMEVERIFY OP_DROP
+            OP_CHECKSIG
+        OP_ENDIF
+        1 OP_CHECKSEQUENCEVERIFY OP_DROP
     OP_ENDIF
 
 To timeout the HTLC, the remote node spends it with the witness:
@@ -191,7 +260,7 @@ limit.
 
 #### Requirements
 
-The base fee:
+The base fee and anchor output values:
   - before the commitment transaction outputs are determined:
     - MUST be subtracted from the `to_local` or `to_remote`
     outputs, as specified in [Fee Calculation](#fee-calculation).
@@ -230,12 +299,13 @@ These HTLC transactions are almost identical, except the HTLC-timeout transactio
 * locktime: `0` for HTLC-success, `cltv_expiry` for HTLC-timeout
 * txin count: 1
    * `txin[0]` outpoint: `txid` of the commitment transaction and `output_index` of the matching HTLC output for the HTLC transaction
-   * `txin[0]` sequence: `0`
+   * `txin[0]` sequence: `0` (set to `1` for `option_anchor_outputs`)
    * `txin[0]` script bytes: `0`
    * `txin[0]` witness stack: `0 <remotehtlcsig> <localhtlcsig>  <payment_preimage>` for HTLC-success, `0 <remotehtlcsig> <localhtlcsig> 0` for HTLC-timeout
 * txout count: 1
    * `txout[0]` amount: the HTLC amount minus fees (see [Fee Calculation](#fee-calculation))
    * `txout[0]` script: version-0 P2WSH with witness script as shown below
+* if `option_anchor_outputs` applies to this commitment transaction, `SIGHASH_SINGLE|SIGHASH_ANYONECANPAY` is used.
 
 The witness script for the output is:
 
@@ -313,12 +383,16 @@ Thus, a simplified formula for *expected weight* is used, which assumes:
 * Signatures are 73 bytes long (the maximum length).
 * There are a small number of outputs (thus 1 byte to count them).
 * There are always both a `to_local` output and a `to_remote` output.
+* (if `option_anchor_outputs`) there are always both a `to_local_anchor` and `to_remote_anchor` output.
 
 This yields the following *expected weights* (details of the computation in [Appendix A](#appendix-a-expected-weights)):
 
-    Commitment weight:   724 + 172 * num-untrimmed-htlc-outputs
-    HTLC-timeout weight: 663
-    HTLC-success weight: 703
+    Commitment weight (no option_anchor_outputs):   724 + 172 * num-untrimmed-htlc-outputs
+    Commitment weight (option_anchor_outputs):     1116 + 172 * num-untrimmed-htlc-outputs
+    HTLC-timeout weight (no option_anchor_outputs): 663
+    HTLC-timeout weight (option_anchor_outputs): 666
+    HTLC-success weight (no option_anchor_outputs): 703
+    HTLC-success weight (option_anchor_outputs): 706
 
 Note the reference to the "base fee" for a commitment transaction in the requirements below, which is what the funder pays. The actual fee may be higher than the amount calculated here, due to rounding and trimmed outputs.
 
@@ -373,7 +447,9 @@ outputs) is 7140 satoshi. The final fee may be even higher if the
 
 ### Fee Payment
 
-Base commitment transaction fees are extracted from the funder's amount; if that amount is insufficient, the entire amount of the funder's output is used.
+Base commitment transaction fees and amounts for `to_local_anchor` and `to_remote_anchor` outputs are extracted from the funder's amount;
+Restrictions to the commitment tx output for the funder in relation to the
+channel reserve apply as described in [BOLT #2](02-peer-protocol.md).
 
 Note that after the fee amount is subtracted from the to-funder output,
 that output may be below `dust_limit_satoshis`, and thus will also
@@ -396,15 +472,21 @@ committed HTLCs:
 1. Calculate which committed HTLCs need to be trimmed (see [Trimmed Outputs](#trimmed-outputs)).
 2. Calculate the base [commitment transaction fee](#fee-calculation).
 3. Subtract this base fee from the funder (either `to_local` or `to_remote`).
-3. For every offered HTLC, if it is not trimmed, add an
+If `option_anchor_outputs` applies to the commitment transaction,
+also subtract two times the fixed anchor size of 330 sats from the funder
+(either `to_local` or `to_remote`).
+4. For every offered HTLC, if it is not trimmed, add an
    [offered HTLC output](#offered-htlc-outputs).
-4. For every received HTLC, if it is not trimmed, add an
+5. For every received HTLC, if it is not trimmed, add an
    [received HTLC output](#received-htlc-outputs).
-5. If the `to_local` amount is greater or equal to `dust_limit_satoshis`,
+6. If the `to_local` amount is greater or equal to `dust_limit_satoshis`,
    add a [`to_local` output](#to_local-output).
-6. If the `to_remote` amount is greater or equal to `dust_limit_satoshis`,
+7. If the `to_remote` amount is greater or equal to `dust_limit_satoshis`,
    add a [`to_remote` output](#to_remote-output).
-7. Sort the outputs into [BIP 69+CLTV order](#transaction-input-and-output-ordering).
+8. If `option_anchor_outputs` applies to the commitment transaction:
+   * if `lo_local` exists and/or there are HTLCs, add a `to_local_anchor` output
+   * if `to_remote` exists and/or there are HTLCs, add a `to_remote_anchor` output
+9. Sort the outputs into [BIP 69+CLTV order](#transaction-input-and-output-ordering).
 
 # Keys
 
@@ -412,7 +494,9 @@ committed HTLCs:
 
 Each commitment transaction uses a unique `localpubkey`, and a `remotepubkey`.
 The HTLC-success and HTLC-timeout transactions use `local_delayedpubkey` and `revocationpubkey`.
-These are changed for every transaction based on the `per_commitment_point`, with the exception of `remotepubkey` if `option_static_remotekey` is negotiated.
+These are changed for every transaction based on the `per_commitment_point`.
+For `option_static_remotekey` and `option_anchor_outputs`, no key rotation
+is applied to `remotepubkey`.
 
 The reason for key change is so that trustless watching for revoked
 transactions can be outsourced. Such a _watcher_ should not be able to
@@ -461,7 +545,7 @@ secrets are known (i.e. the private keys corresponding to `localpubkey`, `local_
 
 ### `remotepubkey` Derivation
 
-If `option_static_remotekey` is negotiated the `remotepubkey` is simply the
+If `option_static_remotekey` or `option_anchor_outputs` is negotiated, the `remotepubkey` is simply the
 remote node's `payment_basepoint`, otherwise it is calculated as above using
 the remote node's `payment_basepoint`.
 
@@ -657,12 +741,22 @@ The *expected weight* of a commitment transaction is calculated as follows:
 		- var_int: 1 byte (pk_script length)
 		- pk_script (p2wsh): 34 bytes
 
-	output_paying_to_remote: 31 bytes
+	output_paying_to_remote (no option_anchor_outputs): 31 bytes
 		- value: 8 bytes
 		- var_int: 1 byte (pk_script length)
 		- pk_script (p2wpkh): 22 bytes
 
-	 htlc_output: 43 bytes
+	output_paying_to_remote (option_anchor_outputs): 43 bytes
+		- value: 8 bytes
+		- var_int: 1 byte (pk_script length)
+		- pk_script (p2wsh): 34 bytes
+
+	output_anchor (option_anchor_outputs): 43 bytes
+		- value: 8 bytes
+		- var_int: 1 byte (pk_script length)
+		- pk_script (p2wsh): 34 bytes
+
+    htlc_output: 43 bytes
 		- value: 8 bytes
 		- var_int: 1 byte (pk_script length)
 		- pk_script (p2wsh): 34 bytes
@@ -671,7 +765,7 @@ The *expected weight* of a commitment transaction is calculated as follows:
 		- flag: 1 byte
 		- marker: 1 byte
 
-	 commitment_transaction: 125 + 43 * num-htlc-outputs bytes
+	 commitment_transaction (no option_anchor_outputs): 125 + 43 * num-htlc-outputs bytes
 		- version: 4 bytes
 		- witness_header <---- part of the witness data
 		- count_tx_in: 1 byte
@@ -684,21 +778,38 @@ The *expected weight* of a commitment transaction is calculated as follows:
 			....htlc_output's...
 		- lock_time: 4 bytes
 
+	 commitment_transaction (option_anchor_outputs): 223 + 43 * num-htlc-outputs bytes
+		- version: 4 bytes
+		- witness_header <---- part of the witness data
+		- count_tx_in: 1 byte
+		- tx_in: 41 bytes
+			funding_input
+		- count_tx_out: 1 byte
+		- tx_out: 172 + 43 * num-htlc-outputs bytes
+			output_paying_to_remote,
+			output_paying_to_local,
+			output_anchor,
+			output_anchor,
+			....htlc_output's...
+		- lock_time: 4 bytes
+
 Multiplying non-witness data by 4 results in a weight of:
 
-	// 500 + 172 * num-htlc-outputs weight
+	// 500 + 172 * num-htlc-outputs weight (no option_anchor_outputs)
+	// 892 + 172 * num-htlc-outputs weight (option_anchor_outputs)
 	commitment_transaction_weight = 4 * commitment_transaction
 
 	// 224 weight
 	witness_weight = witness_header + witness
 
-	overall_weight = 500 + 172 * num-htlc-outputs + 224 weight
+	overall_weight (no option_anchor_outputs) = 500 + 172 * num-htlc-outputs + 224 weight
+	overall_weight (option_anchor_outputs) = 892 + 172 * num-htlc-outputs + 224 weight
 
 ## Expected Weight of HTLC-timeout and HTLC-success Transactions
 
 The *expected weight* of an HTLC transaction is calculated as follows:
 
-    accepted_htlc_script: 139 bytes
+    accepted_htlc_script: 139 bytes (142 bytes with option_anchor_outputs)
         - OP_DUP: 1 byte
         - OP_HASH160: 1 byte
         - OP_DATA: 1 byte (RIPEMD160(SHA256(revocationpubkey)) length)
@@ -733,9 +844,12 @@ The *expected weight* of an HTLC transaction is calculated as follows:
         - OP_DROP: 1 byte
         - OP_CHECKSIG: 1 byte
         - OP_ENDIF: 1 byte
+        - OP_1: 1 byte (option_anchor_outputs)
+        - OP_CHECKSEQUENCEVERIFY: 1 byte (option_anchor_outputs)
+        - OP_DROP: 1 byte (option_anchor_outputs)
         - OP_ENDIF: 1 byte
 
-    offered_htlc_script: 133 bytes
+    offered_htlc_script: 133 bytes (136 bytes with option_anchor_outputs)
         - OP_DUP: 1 byte
         - OP_HASH160: 1 byte
         - OP_DATA: 1 byte (RIPEMD160(SHA256(revocationpubkey)) length)
@@ -766,9 +880,12 @@ The *expected weight* of an HTLC transaction is calculated as follows:
 		- OP_EQUALVERIFY: 1 byte
 		- OP_CHECKSIG: 1 byte
 		- OP_ENDIF: 1 byte
+        - OP_1: 1 byte (option_anchor_outputs)
+        - OP_CHECKSEQUENCEVERIFY: 1 byte (option_anchor_outputs)
+        - OP_DROP: 1 byte (option_anchor_outputs)
         - OP_ENDIF: 1 byte
 
-    timeout_witness: 285 bytes
+    timeout_witness: 285 bytes (288 bytes with option_anchor_outputs)
 		- number_of_witness_elements: 1 byte
 		- nil_length: 1 byte
 		- sig_alice_length: 1 byte
@@ -779,7 +896,7 @@ The *expected weight* of an HTLC transaction is calculated as follows:
 		- witness_script_length: 1 byte
 		- witness_script (offered_htlc_script)
 
-    success_witness: 325 bytes
+    success_witness: 325 bytes (328 bytes with option_anchor_outputs)
 		- number_of_witness_elements: 1 byte
 		- nil_length: 1 byte
 		- sig_alice_length: 1 byte
@@ -817,11 +934,11 @@ The *expected weight* of an HTLC transaction is calculated as follows:
 		- lock_time: 4 bytes
 
 Multiplying non-witness data by 4 results in a weight of 376. Adding
-the witness data for each case (285 + 2 for HTLC-timeout, 325 + 2 for
+the witness data for each case (285 or 288 + 2 for HTLC-timeout, 325 or 328 + 2 for
 HTLC-success) results in weights of:
 
-	663 (HTLC-timeout)
-	703 (HTLC-success)
+	663 (HTLC-timeout) (666 with with option_anchor_outputs))
+	703 (HTLC-success) (706 with with option_anchor_outputs))
 
 # Appendix B: Funding Transaction Test Vectors
 
