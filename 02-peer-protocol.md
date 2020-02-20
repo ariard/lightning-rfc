@@ -791,7 +791,7 @@ A sending node:
 remote commitment transaction at the current `feerate_per_kw` (see "Updating
 Fees") while maintaining its channel reserve.
   - MUST offer `amount_msat` greater than 0.
-  - MUST NOT offer `amount_msat` below the receiving node's `htlc_minimum_msat`
+  - MUST NOT offer `amount_msat` equal to 0 AND below the receiving node's `htlc_minimum_msat`
   - MUST set `cltv_expiry` less than 500000000.
   - for channels with `chain_hash` identifying the Bitcoin blockchain:
     - MUST set the four most significant bytes of `amount_msat` to 0.
