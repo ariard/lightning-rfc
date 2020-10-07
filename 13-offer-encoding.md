@@ -198,10 +198,9 @@ The designated prefix for offers is `lno`.
     1. type: 14 (`expiry_timestamp`)
     2. data:
         * [`tu64`:`expiry_timestamp`]
-    1. type: 16 (`blindedpath`)
+    1. type: 16 (`paths`)
     2. data:
-        * [`point`:`blinding`]
-        * [`...*onionmsg_path`:`path`]
+        * [`...*blinded_path`:`paths`]
 	1. type: 20 (`vendor`)
     2. data:
 		* [`...*byte`:`vendor`]
@@ -226,6 +225,12 @@ The designated prefix for offers is `lno`.
     1. type: 240 (`signature`)
     2. data:
         * [`signature`:`sig`]
+
+1. subtype: `blinded_path`
+2. data:
+   * [`point`:`blinding`]
+   * [`u16`:`num_hops`
+   * [`onionmsg_path`:`num_hops*path`]
 
 ## Recurrence
 
@@ -283,10 +288,10 @@ A writer of an offer:
     - MUST set `expiry_timestamp` to the number of seconds after midnight 1
       January 1970, UTC that invoice_request should not be attempted.
   - if it is connected only by private channels:
-    - MUST include `blindedpath` containing one or more paths to the node from
+    - MUST include `paths` containing one or more paths to the node from
 	  publicly reachable nodes.
   - otherwise:
-    - MAY include `blindedpath`.
+    - MAY include `paths`.
   - if it sets `vendor`:
     - MUST set it to a valid UTF-8 string.
     - SHOULD set it to clearly identify the issuer of the invoice.
@@ -346,10 +351,9 @@ response to an offer (usually via an `onion_message` `invoice_request` field).
     1. type: 12 (`features`)
     2. data:
         * [`...*byte`:`features`]
-    1. type: 16 (`blindedpath`)
+    1. type: 16 (`paths`)
     2. data:
-        * [`point`:`blinding`]
-        * [`...*onionmsg_path`:`path`]
+        * [`...*blinded_path`:`paths`]
 	1. type: 32 (`quantity`)
     2. data:
 		* [`tu64`:`quantity`]
@@ -426,10 +430,9 @@ to an `invoice_request` using `onion_message` `invoice` field.
     1. type: 12 (`features`)
     2. data:
         * [`...*byte`:`features`]
-    1. type: 16 (`blindedpath`)
+    1. type: 16 (`paths`)
     2. data:
-        * [`point`:`blinding`]
-        * [`...*onionmsg_path`:`path`]
+        * [`...*blinded_path`:`paths`]
     1. type: 18 (`blindedpay`)
     2. data:
         * [`...*blinded_payinfo`:`payinfo`]
@@ -464,22 +467,12 @@ to an `invoice_request` using `onion_message` `invoice` field.
     2. data:
 	    * [`u8`:`num`]
 		* [`num*fallback_address`:`fallbacks`]
-    1. type: 50 (`routehelp`)
-    2. data:
-		* [`...*payroute`:`routes`]
 	1. type: 52 (`refund_signature`)
     2. data:
         * [`signature`:`payer_signature`]
     1. type: 240 (`signature`)
     2. data:
         * [`signature`:`sig`]
-
-1. subtype: `payroute`
-2. data:
-   * [`point`:`blinding`]
-   * [`u16`:`num_hops`
-   * [`onionmsg_path`:`num_hops*path`]
-   * [`blinded_payinfo`:`num_hops*payinfo`]
 
 1. subtype: `blinded_payinfo`
 2. data:
@@ -530,14 +523,14 @@ A writer of an invoice:
       - `type` to `17` and `address` to a public key hash
       - `type` to `18` and `address` to a script hash.
   - if it is connected only by private channels:
-    - MUST include a `blindedpath` containing one or more paths to the node.
+    - MUST include a `blinded_path` containing one or more paths to the node.
   - otherwise:
-    - MAY include `blindedpath`.
-  - if it includes `blindedpath`:
+    - MAY include `blinded_path`.
+  - if it includes `blinded_path`:
     - MUST specify `path` in order of most-preferred to least-preferred if
       it has a preference.
     - MUST include `blinded_payinfo` with exactly one `payinfo` for
-	  each `blindedpath` entry, in order.
+	  each `onionmsg_path` in `blinded_path`, in order.
   - otherwise:
     - MUST NOT include `blinded_payinfo`.
   - MUST set (or not set) `offer_id` exactly as the invoice_request did.
