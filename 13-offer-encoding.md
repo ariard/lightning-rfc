@@ -8,7 +8,7 @@
   * [TLV Fields](#tlv-fields)
   * [Invoices](#invoices)
   * [Offers](#offers)
-  * [Invrequests](#invrequests)
+  * [Invoice Requests](#invoice-requests)
 
 # Limitations of BOLT 11
 
@@ -37,7 +37,7 @@ limitations:
 
 # Payment Flow Scenarios
 
-Here I use "user" as shorthand for the individual user's lightning
+Here we use "user" as shorthand for the individual user's lightning
 node, and "merchant" as the shorthand for the node of someone who is
 selling or has sold something.
 
@@ -46,15 +46,15 @@ There are two basic payment flows supported by BOLT 13:
 The general user-pays-merchant flow is:
 1. A merchant publishes an *offer*, such as on a web page or a QR code.
 2. Every user requests a unique *invoice* over the lightning network
-   using an *invrequest* message.
+   using an *invoice_request* message.
 3. The merchant replies with the *invoice*.
 4. The user makes a payment to the merchant indicated by the invoice.
 
 The merchant-pays-user flow (e.g. ATM or refund):
-1. The merchant provides a user-specific *invrequest* in a webpage or QR code,
+1. The merchant provides a user-specific *invoice_request* in a webpage or QR code,
    with an amount (for a refund, also a reference to the to-be-refunded
    invoice).
-2. A user sends an *invoice* for the amount in the *invrequest* (for a
+2. A user sends an *invoice* for the amount in the *invoice_request* (for a
    refund, a proof that they requested the original)
 3. The merchant makes a payment to the user indicated by the invoice.
 
@@ -71,7 +71,7 @@ claim they paid the invoice, too.[1]
 2. Contain a transferrable proof that the user is the one who was
    responsible for paying the invoice in the first place.
 
-Providing a key in *invrequest* allows a user to prove that they were the one
+Providing a key in *invoice_request* allows a user to prove that they were the one
 to request the invoice.  In addition, the merkle construction of the BOLT 13
 invoice signature allows the user to selectively reveal fields of the invoice
 in case of dispute.
@@ -281,7 +281,7 @@ A writer of an offer:
     - SHOULD set `features` to the bitmap of offer features.
   - if the offer expires:
     - MUST set `expiry_timestamp` to the number of seconds after midnight 1
-      January 1970, UTC that invrequest should not be attempted.
+      January 1970, UTC that invoice_request should not be attempted.
   - if it is connected only by private channels:
     - MUST include `blindedpath` containing one or more paths to the node from
 	  publicly reachable nodes.
@@ -319,17 +319,17 @@ A reader of an offer:
 		from that expectation.
   - FIXME: more!
 
-# Invrequests
+# Invoice Requests
 
-Invrequests are a request for an invoice; the designated prefix for
+Invoice Requests are a request for an invoice; the designated prefix for
 invoices is `lnr`.
 
-These can be spontaneous, such as a refund or exchange withdrawl, or in
-response to an offer (usually via an `onion_message` `invreq` field).
+These can be spontaneous, such as a refund or exchange withdrawal, or in
+response to an offer (usually via an `onion_message` `invoice_request` field).
 
-## TLV Fields for Invrequests
+## TLV Fields for `invoice_request`
 
-1. tlvs: `invrequest_tlvs`
+1. tlvs: `invoice_request_tlvs`
 2. types:
     1. type: 2 (`chains`)
     2. data:
@@ -356,19 +356,19 @@ response to an offer (usually via an `onion_message` `invreq` field).
 	1. type: 34 (`refund_for`)
     2. data:
         * [`sha256`:`refunded_payment_hash`]
-    1. type: 36 (`invrequest_recurrence`)
+    1. type: 36 (`invoice_request_recurrence`)
     2. data:
        * [`tu64`:`counter`]
     1. type: 38 (`payer_key`)
     2. data:
         * [`pubkey32`:`key`]
 
-## Requirements for Invrequests
+## Requirements for Invoice_Requests
 
-The writer of an invrequest:
+The writer of an invoice_request:
   - MUST set `payer_key` to a transient public key.
   - MUST remember the secret key corresponding to `payer_key`.
-  - if the invrequest is a response to an offer:
+  - if the invoice_request is a response to an offer:
     - MUST set `offer_id` to the merkle root of the offer as described in [Signature Calculation](#signature-calculation).
 	- MUST NOT set or imply any `chain_hash` not set or implied by the offer.
 	- MUST NOT set `description`.
@@ -387,13 +387,13 @@ The writer of an invrequest:
   - otherwise:
     - MUST NOT set `amount`
   - if there was a corresponding offer, and the offer contained `recurrence`:
-    - MUST set `invrequest_recurrence` `index` to 0 for the first 
+    - MUST set `recurrence` `index` to 0 for the first 
       invoice request, and increment it for each successful invoice paid.
     - MUST use the same `payer_key` for all recurring payments of
       this offer.
   - otherwise:
-    - MUST NOT set `invrequest_recurrence`.
-  - if the invrequest is for a partial or full refund for a previously-paid
+    - MUST NOT set `recurrence`.
+  - if the invoice_request is for a partial or full refund for a previously-paid
     invoice:
     - SHOULD set `refunded_payment_hash` to the `payment_hash` of that
       invoice.
@@ -407,7 +407,7 @@ Invoices are a request for payment, and when the payment is made they
 it can be combined with the invoice to form a cryptographic receipt.
 
 The designated prefix for invoices is `lni`.  It can be sent in response
-to an `invrequest` using `onion_message` `invoice` field.
+to an `invoice_request` using `onion_message` `invoice` field.
 
 1. tlvs: `invoice_tlvs`
 2. types:
@@ -498,7 +498,7 @@ to an `invrequest` using `onion_message` `invoice` field.
 ## Requirements
 
 A writer of an invoice:
-  - if the `invrequest` contained the same `offer_id`, `payer_key` and `invrequest_recurrence` (if any) as a previous `invrequest`:
+  - if the `invoice_request` contained the same `offer_id`, `payer_key` and `recurrence` (if any) as a previous `invoice_request`:
     - MAY simply reuse the previous invoice.
   - otherwise:
     - MUST NOT reuse a previous invoice.
@@ -513,7 +513,7 @@ A writer of an invoice:
     - MUST specify `chains` the offer is valid for.
   - otherwise:
     - the bitcoin chain is implied as the first and only entry.
-  - if it supports bolt11 features:
+  - if it has bolt9 features:
     - MUST set `features` to the bitmap of features.
   - if the expiry for accepting payment is not 604800 seconds after `timestamp`:
     - MUST set `expiry` to the number of seconds after `timestamp`
@@ -540,11 +540,11 @@ A writer of an invoice:
 	  each `blindedpath` entry, in order.
   - otherwise:
     - MUST NOT include `blinded_payinfo`.
-  - MUST set (or not set) `offer_id` exactly as the invrequest did.
-  - MUST set (or not set) `quantity` exactly as the invrequest did.
-  - MUST set (or not set) `refund_for` exactly as the invrequest did.
-  - MUST set (or not set) `invrequest_recurrence` exactly as the invrequest did.
-  - MUST set `payer_key` exactly as the invrequest did.
+  - MUST set (or not set) `offer_id` exactly as the invoice_request did.
+  - MUST set (or not set) `quantity` exactly as the invoice_request did.
+  - MUST set (or not set) `refund_for` exactly as the invoice_request did.
+  - MUST set (or not set) `recurrence` exactly as the invoice_request did.
+  - MUST set `payer_key` exactly as the invoice_request did.
   - if it sets `refund_for`:
     - MUST set `refund_signature` to the signature of the
       `refunded_payment_hash` using the `payer_key`.
@@ -553,13 +553,13 @@ A writer of an invoice:
     - MUST begin `description` with the `description` from the offer.
     - MAY append additional information to `description` (e.g. " +shipping").
 
-  - if the invrequest specified an `amount`:
+  - if the invoice_request specified an `amount`:
     - MUST specify the same `amount`.
   - otherwise:
     - MUST specify `amount` in multiples of the minimum lightning-payable unit
       (e.g. milli-satoshis for bitcoin) for the first `chains` entry.
     - SHOULD derive `amount` using the `amount` and `currency` from
-      the offer, and `quantity` from the invrequest.
+      the offer, and `quantity` from the invoice_request.
 
 A reader of an invoice:
 
@@ -568,13 +568,13 @@ A reader of an invoice:
 ## Rationale
 
 Because the messaging layer is unreliable, it's quite possible to
-receive multuple requests for the same offer.  As it's the caller's
+receive multiple requests for the same offer.  As it's the caller's
 responsibility not to reuse `payer_key` except for recurring invoices,
 the writer doesn't have to check all the fields are duplicates before
 simply returning a previous invoice.
 
 The invoice duplicates fields rather than committing to the previous offer or
-invrequest.  This flattened format simplifies storage at some space cost, as
+invoice_request.  This flattened format simplifies storage at some space cost, as
 the payer need only remember the invoice for any refunds or proof.
 
 

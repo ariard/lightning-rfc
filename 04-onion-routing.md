@@ -391,9 +391,9 @@ is no legacy format, thus a `bigsize` of 0 means no payload.
     1. type: 12 (`blinding`)
     2. data:
         * [`point`:`blinding`]
-    1. type: 64 (`invreq`)
+    1. type: 64 (`invoice_request`)
     2. data:
-        * [`...*byte`:`invreq`]
+        * [`...*byte`:`invoice_request`]
     1. type: 66 (`invoice`)
     2. data:
         * [`...*byte`:`invoice`]
