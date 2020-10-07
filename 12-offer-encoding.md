@@ -229,8 +229,8 @@ The designated prefix for offers is `lno`.
 1. subtype: `blinded_path`
 2. data:
    * [`point`:`blinding`]
-   * [`u16`:`num_hops`
-   * [`onionmsg_path`:`num_hops*path`]
+   * [`u16`:`num_hops`]
+   * [`num_hops*onionmsg_path`:`path`]
 
 ## Recurrence
 
