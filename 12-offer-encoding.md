@@ -1,4 +1,4 @@
-# BOLT #13: Flexible Protocol for Lightning Payments
+# BOLT #12: Flexible Protocol for Lightning Payments
 
 # Table of Contents
 
@@ -41,7 +41,7 @@ Here we use "user" as shorthand for the individual user's lightning
 node, and "merchant" as the shorthand for the node of someone who is
 selling or has sold something.
 
-There are two basic payment flows supported by BOLT 13:
+There are two basic payment flows supported by BOLT 12:
 
 The general user-pays-merchant flow is:
 1. A merchant publishes an *offer*, such as on a web page or a QR code.
@@ -72,7 +72,7 @@ claim they paid the invoice, too.[1]
    responsible for paying the invoice in the first place.
 
 Providing a key in *invoice_request* allows a user to prove that they were the one
-to request the invoice.  In addition, the merkle construction of the BOLT 13
+to request the invoice.  In addition, the merkle construction of the BOLT 12
 invoice signature allows the user to selectively reveal fields of the invoice
 in case of dispute.
 
