@@ -360,7 +360,7 @@ response to an offer (usually via an `onion_message` `invoice_request` field).
 	1. type: 34 (`refund_for`)
     2. data:
         * [`sha256`:`refunded_payment_hash`]
-    1. type: 36 (`invoice_request_recurrence`)
+    1. type: 36 (`recurrence_counter`)
     2. data:
        * [`tu64`:`counter`]
     1. type: 38 (`payer_key`)
@@ -391,12 +391,12 @@ The writer of an invoice_request:
   - otherwise:
     - MUST NOT set `amount`
   - if there was a corresponding offer, and the offer contained `recurrence`:
-    - MUST set `recurrence` `index` to 0 for the first 
+    - MUST set `recurrence_counter` `counter` to 0 for the first 
       invoice request, and increment it for each successful invoice paid.
     - MUST use the same `payer_key` for all recurring payments of
       this offer.
   - otherwise:
-    - MUST NOT set `recurrence`.
+    - MUST NOT set `recurrence_counter`.
   - if the invoice_request is for a partial or full refund for a previously-paid
     invoice:
     - SHOULD set `refunded_payment_hash` to the `payment_hash` of that
