@@ -111,7 +111,7 @@ zzzzz
 Each form is signed using one or more TLV signature elements; TLV types
 240 through 1000 are considered signature elements.
 
-The only currently defined signature TLV is the secp256k1 signature of
+The only currently defined signature TLV is the [BIP-340] signature of
 the SHA256(`LnPrefix` | prefix | merkle-root), where prefix is the designated
 prefix, e.g. `lno`.
 
@@ -367,7 +367,7 @@ response to an offer (usually via an `onion_message` `invoice_request` field).
     2. data:
         * [`pubkey32`:`key`]
 
-## Requirements for Invoice_Requests
+## Requirements for Invoice Requests
 
 The writer of an invoice_request:
   - MUST set `payer_key` to a transient public key.
