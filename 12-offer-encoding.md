@@ -448,6 +448,9 @@ to an `invoice_request` using `onion_message` `invoice` field.
 	1. type: 34 (`refund_for`)
     2. data:
         * [`sha256`:`refunded_payment_hash`]
+    1. type: 36 (`recurrence_counter`)
+    2. data:
+       * [`tu64`:`counter`]
     1. type: 38 (`payer_key`)
     2. data:
         * [`pubkey32`:`key`]
@@ -491,7 +494,7 @@ to an `invoice_request` using `onion_message` `invoice` field.
 ## Requirements
 
 A writer of an invoice:
-  - if the `invoice_request` contained the same `offer_id`, `payer_key` and `recurrence` (if any) as a previous `invoice_request`:
+  - if the `invoice_request` contained the same `offer_id`, `payer_key` and `recurrence_counter` (if any) as a previous `invoice_request`:
     - MAY simply reuse the previous invoice.
   - otherwise:
     - MUST NOT reuse a previous invoice.
@@ -536,7 +539,7 @@ A writer of an invoice:
   - MUST set (or not set) `offer_id` exactly as the invoice_request did.
   - MUST set (or not set) `quantity` exactly as the invoice_request did.
   - MUST set (or not set) `refund_for` exactly as the invoice_request did.
-  - MUST set (or not set) `recurrence` exactly as the invoice_request did.
+  - MUST set (or not set) `recurrence_counter` exactly as the invoice_request did.
   - MUST set `payer_key` exactly as the invoice_request did.
   - if it sets `refund_for`:
     - MUST set `refund_signature` to the signature of the
