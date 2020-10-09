@@ -344,7 +344,7 @@ response to an offer (usually via an `onion_message` `invoice_request` field).
         * [`sha256`:`offer_id`]
     1. type: 8 (`amount`)
     2. data:
-        * [`tu64`:`amount`]
+        * [`tu64`:`msat`]
 	1. type: 10 (`description`)
     2. data:
 		* [`...*byte`:`description`]
@@ -386,7 +386,7 @@ The writer of an invoice_request:
       of the payment.
 
   - if there was no corresponding offer, or the offer did not specify `amount`:
-    - MUST specify `amount` in multiples of the minimum lightning-payable unit
+    - MUST specify `amount`.`msat` in multiples of the minimum lightning-payable unit
       (e.g. milli-satoshis for bitcoin) for the first `chains` entry.
   - otherwise:
     - MUST NOT set `amount`
@@ -423,7 +423,7 @@ to an `invoice_request` using `onion_message` `invoice` field.
         * [`sha256`:`offer_id`]
     1. type: 8 (`amount`)
     2. data:
-        * [`tu64`:`amount`]
+        * [`tu64`:`msat`]
 	1. type: 10 (`description`)
     2. data:
 		* [`...*byte`:`description`]
@@ -547,11 +547,11 @@ A writer of an invoice:
     - MAY append additional information to `description` (e.g. " +shipping").
 
   - if the invoice_request specified an `amount`:
-    - MUST specify the same `amount`.
+    - MUST specify the same `msat`.
   - otherwise:
-    - MUST specify `amount` in multiples of the minimum lightning-payable unit
+    - MUST specify `amount`.`msat` in multiples of the minimum lightning-payable unit
       (e.g. milli-satoshis for bitcoin) for the first `chains` entry.
-    - SHOULD derive `amount` using the `amount` and `currency` from
+    - SHOULD derive `msat` using the `amount` and `currency` from
       the offer, and `quantity` from the invoice_request.
 
 A reader of an invoice:
