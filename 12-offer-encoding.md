@@ -365,7 +365,8 @@ response to an offer (usually via an `onion_message` `invoice_request` field).
         * [`sha256`:`refunded_payment_hash`]
     1. type: 36 (`recurrence_counter`)
     2. data:
-       * [`tu64`:`counter`]
+        * [`tu64`:`counter`]
+        * [`signature`:`counter_sig`]
     1. type: 38 (`payer_key`)
     2. data:
         * [`pubkey32`:`key`]
@@ -394,10 +395,18 @@ The writer of an invoice_request:
   - otherwise:
     - MUST NOT set `amount`
   - if there was a corresponding offer, and the offer contained `recurrence`:
-    - MUST set `recurrence_counter` `counter` to 0 for the first 
-      invoice request, and increment it for each successful invoice paid.
-    - MUST use the same `payer_key` for all recurring payments of
-      this offer.
+    - for the initial request:
+	  - MUST use a unique `payer_key`.
+	  - MUST set `recurrence_counter` `counter` to 0.
+    - for any successive requests:
+	  - MUST use the same `payer_key` as the initial request.
+	  - MUST set `recurrence_counter` `counter` to one greater than the highest-paid invoice.
+    - MUST set `recurrence_counter` `counter_sig` to
+	  SIG('lnr_recurrence_counter',`offer_id`||`counter`,`payer_key`).
+    - SHOULD NOT send an `invoice_request` for a period which has
+	  already passed.
+    - SHOULD NOT send an `invoice_request` for a period whose
+      immediate predecessor has not yet begun.
   - otherwise:
     - MUST NOT set `recurrence_counter`.
   - if the invoice_request is for a partial or full refund for a previously-paid
@@ -407,6 +416,21 @@ The writer of an invoice_request:
   - otherwise:
     - MUST NOT set `refunded_payment_hash`.
 
+## Rationale
+
+We insist that recurring requests be in order (thus, if you pay an
+invoice for #34 of a recurring offer, it implicitly commits to the
+successful payment of #0 through #33).
+
+We also insist that you don't get more than 1 ahead; for example, if
+the period is 1 minute, you can immediately request invoice #0, pay
+it, then request #1 even though we're currently in period #0.  This
+provides some slack, without allowing commitments into the far far
+future.
+
+To avoid probing (should a payer_key become public in some way), we
+require a signature for recurring invoice requests; this ensures that
+no third party can determine how many invoices have been paid already.
 
 # Invoices
 
