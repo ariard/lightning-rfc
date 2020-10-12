@@ -152,7 +152,7 @@ Assume L1A < L2A:
 
        L1A   L2A                                 L3
          \   /                                    |
-	      v v                                     v
+          v v                                     v
   L1A2A=SHA256('LnBranch'|L1A|L2A)               L3
   
 Assume L1A2A > L3:
@@ -192,9 +192,9 @@ The designated prefix for offers is `lno`.
     1. type: 8 (`amount`)
     2. data:
         * [`tu64`:`amount`]
-	1. type: 10 (`description`)
+    1. type: 10 (`description`)
     2. data:
-		* [`...*byte`:`description`]
+        * [`...*byte`:`description`]
     1. type: 12 (`features`)
     2. data:
         * [`...*byte`:`features`]
@@ -204,24 +204,24 @@ The designated prefix for offers is `lno`.
     1. type: 16 (`paths`)
     2. data:
         * [`...*blinded_path`:`paths`]
-	1. type: 20 (`vendor`)
+    1. type: 20 (`vendor`)
     2. data:
-		* [`...*byte`:`vendor`]
-	1. type: 22 (`quantity_min`)
+        * [`...*byte`:`vendor`]
+    1. type: 22 (`quantity_min`)
     2. data:
-		* [`tu64`:`min`]
-	1. type: 24 (`quantity_max`)
+        * [`tu64`:`min`]
+    1. type: 24 (`quantity_max`)
     2. data:
-		* [`tu64`:`max`]
+        * [`tu64`:`max`]
     1. type: 26 (`recurrence`)
     2. data:
-	    * [`byte`:`time_unit`]
-		* [`u32`:`period`]
-		* [`tu32`:`limit`]
+        * [`byte`:`time_unit`]
+        * [`u32`:`period`]
+        * [`tu32`:`limit`]
     1. type: 28 (`recurrence_base`)
     2. data:
-		* [`u32`:`basetime`]
-		* [`tu32`:`paywindow`]
+        * [`u32`:`basetime`]
+        * [`tu32`:`paywindow`]
     1. type: 30 (`node_id`)
     2. data:
         * [`pubkey32`:`node_id`]
@@ -277,12 +277,12 @@ A writer of an offer:
   - otherwise:
     - the bitcoin chain is implied as the first and only entry.
   - if a specific minimum `amount` is required for successful payment:
-	- MUST specify `amount` to the amount expected (per item).
+    - MUST specify `amount` to the amount expected (per item).
     - if the currency for `amount` is that of the first entry in `chains`:
-	  - MUST specify `amount` in multiples of the minimum lightning-payable unit
+      - MUST specify `amount` in multiples of the minimum lightning-payable unit
         (e.g. milli-satoshis for bitcoin).
-	- otherwise:
-	  - MUST specify `iso4217` as an ISO 4712 three-letter code.
+    - otherwise:
+      - MUST specify `iso4217` as an ISO 4712 three-letter code.
       - MUST specify `amount` in the currency unit adjusted by the ISO 4712
         exponent (e.g. USD cents).
   - if it supports offer features:
@@ -292,29 +292,29 @@ A writer of an offer:
       January 1970, UTC that invoice_request should not be attempted.
   - if it is connected only by private channels:
     - MUST include `paths` containing one or more paths to the node from
-	  publicly reachable nodes.
+      publicly reachable nodes.
   - otherwise:
     - MAY include `paths`.
   - if it sets `vendor`:
     - MUST set it to a valid UTF-8 string.
     - SHOULD set it to clearly identify the issuer of the invoice.
   - if it can supply more than one item for a single invoice
-	- if the minimum quantity is more than 1:
-	  - MUST set that minimum in `quantity_min`
+    - if the minimum quantity is more than 1:
+      - MUST set that minimum in `quantity_min`
     - if the maximum quantity is known:
-	  - MUST set that maximum in `quantity_max`
+      - MUST set that maximum in `quantity_max`
     - if neither:
-	  - MUST set `quantity_min` to 1 to indicate `quantity` is supported.
+      - MUST set `quantity_min` to 1 to indicate `quantity` is supported.
   - MAY include `recurrence` to indicate offer should trigger time-spaced
     invoices.
   - if it includes `recurrence`:
       - MUST set `time_unit` to 0 (seconds), 1 (days), 2 (months), 3 (years).
-	  - MUST set `period` to how often (per `time-unit`) it wants to be paid.
-	  - if there is a maximum number of payments:
-	    - MUST set `limit` to the maximum number of payments
-	  - otherwise
-	    - MUST set `limit` to 0.
-	  - MAY include `recurrence_base` if invoices are expected at
+      - MUST set `period` to how often (per `time-unit`) it wants to be paid.
+      - if there is a maximum number of payments:
+        - MUST set `limit` to the maximum number of payments
+      - otherwise
+        - MUST set `limit` to 0.
+      - MAY include `recurrence_base` if invoices are expected at
         particular time offsets.
   - otherwise:
     - MUST NOT include `recurrence_base`.
@@ -323,8 +323,8 @@ A reader of an offer:
   - SHOULD gain user consent for recurring payments.
   - SHOULD allow user to view and cancel recurring payments.
   - if it uses `amount` to provide the user with a cost estimate:
-	- MUST warn user if amount of actual invoice differs significantly
-		from that expectation.
+    - MUST warn user if amount of actual invoice differs significantly
+        from that expectation.
   - FIXME: more!
 
 # Invoice Requests
@@ -348,19 +348,19 @@ response to an offer (usually via an `onion_message` `invoice_request` field).
     1. type: 8 (`amount`)
     2. data:
         * [`tu64`:`msat`]
-	1. type: 10 (`description`)
+    1. type: 10 (`description`)
     2. data:
-		* [`...*byte`:`description`]
+        * [`...*byte`:`description`]
     1. type: 12 (`features`)
     2. data:
         * [`...*byte`:`features`]
     1. type: 16 (`paths`)
     2. data:
         * [`...*blinded_path`:`paths`]
-	1. type: 32 (`quantity`)
+    1. type: 32 (`quantity`)
     2. data:
-		* [`tu64`:`quantity`]
-	1. type: 34 (`refund_for`)
+        * [`tu64`:`quantity`]
+    1. type: 34 (`refund_for`)
     2. data:
         * [`sha256`:`refunded_payment_hash`]
     1. type: 36 (`recurrence_counter`)
@@ -378,13 +378,13 @@ The writer of an invoice_request:
   - MUST remember the secret key corresponding to `payer_key`.
   - if the invoice_request is a response to an offer:
     - MUST set `offer_id` to the merkle root of the offer as described in [Signature Calculation](#signature-calculation).
-	- MUST NOT set or imply any `chain_hash` not set or implied by the offer.
-	- MUST NOT set `description`.
-	- if the offer had a `quantity_min` or `quantity_max` field:
-	  - MUST set `quantity`
-	  - MUST set it within that (inclusive) range.
+    - MUST NOT set or imply any `chain_hash` not set or implied by the offer.
+    - MUST NOT set `description`.
+    - if the offer had a `quantity_min` or `quantity_max` field:
+      - MUST set `quantity`
+      - MUST set it within that (inclusive) range.
     - otherwise:
-	  - MUST NOT set `quantity`
+      - MUST NOT set `quantity`
   - otherwise (not responding to an offer):
     - MUST set `description` to a complete description of the purpose
       of the payment.
@@ -396,15 +396,15 @@ The writer of an invoice_request:
     - MUST NOT set `amount`
   - if there was a corresponding offer, and the offer contained `recurrence`:
     - for the initial request:
-	  - MUST use a unique `payer_key`.
-	  - MUST set `recurrence_counter` `counter` to 0.
+      - MUST use a unique `payer_key`.
+      - MUST set `recurrence_counter` `counter` to 0.
     - for any successive requests:
-	  - MUST use the same `payer_key` as the initial request.
-	  - MUST set `recurrence_counter` `counter` to one greater than the highest-paid invoice.
+      - MUST use the same `payer_key` as the initial request.
+      - MUST set `recurrence_counter` `counter` to one greater than the highest-paid invoice.
     - MUST set `recurrence_counter` `counter_sig` to
-	  SIG('lnr_recurrence_counter',`offer_id`||`counter`,`payer_key`).
+      SIG('lnr_recurrence_counter',`offer_id`||`counter`,`payer_key`).
     - SHOULD NOT send an `invoice_request` for a period which has
-	  already passed.
+      already passed.
     - SHOULD NOT send an `invoice_request` for a period whose
       immediate predecessor has not yet begun.
   - otherwise:
@@ -451,9 +451,9 @@ to an `invoice_request` using `onion_message` `invoice` field.
     1. type: 8 (`amount`)
     2. data:
         * [`tu64`:`msat`]
-	1. type: 10 (`description`)
+    1. type: 10 (`description`)
     2. data:
-		* [`...*byte`:`description`]
+        * [`...*byte`:`description`]
     1. type: 12 (`features`)
     2. data:
         * [`...*byte`:`features`]
@@ -463,16 +463,16 @@ to an `invoice_request` using `onion_message` `invoice` field.
     1. type: 18 (`blindedpay`)
     2. data:
         * [`...*blinded_payinfo`:`payinfo`]
-	1. type: 20 (`vendor`)
+    1. type: 20 (`vendor`)
     2. data:
-		* [`...*byte`:`vendor`]
+        * [`...*byte`:`vendor`]
     1. type: 30 (`node_id`)
     2. data:
         * [`pubkey32`:`node_id`]
-	1. type: 32 (`quantity`)
+    1. type: 32 (`quantity`)
     2. data:
-		* [`tu64`:`quantity`]
-	1. type: 34 (`refund_for`)
+        * [`tu64`:`quantity`]
+    1. type: 34 (`refund_for`)
     2. data:
         * [`sha256`:`refunded_payment_hash`]
     1. type: 36 (`recurrence_counter`)
@@ -495,9 +495,9 @@ to an `invoice_request` using `onion_message` `invoice` field.
         * [`tu32`:`min_final_cltv_expiry`]
     1. type: 48 (`fallbacks`)
     2. data:
-	    * [`u8`:`num`]
-		* [`num*fallback_address`:`fallbacks`]
-	1. type: 52 (`refund_signature`)
+        * [`u8`:`num`]
+        * [`num*fallback_address`:`fallbacks`]
+    1. type: 52 (`refund_signature`)
     2. data:
         * [`signature`:`payer_signature`]
     1. type: 240 (`signature`)
@@ -560,7 +560,7 @@ A writer of an invoice:
     - MUST specify `path` in order of most-preferred to least-preferred if
       it has a preference.
     - MUST include `blinded_payinfo` with exactly one `payinfo` for
-	  each `onionmsg_path` in `blinded_path`, in order.
+      each `onionmsg_path` in `blinded_path`, in order.
   - otherwise:
     - MUST NOT include `blinded_payinfo`.
   - MUST set (or not set) `offer_id` exactly as the invoice_request did.
