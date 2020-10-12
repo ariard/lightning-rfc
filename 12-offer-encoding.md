@@ -108,16 +108,19 @@ zzzzz
 
 ## Signature Calculation
 
+All signatures are created as per [BIP-340], and tagged as recommended
+there.  Thus to sign a message `msg` with `tag`, `m` is
+SHA256(SHA256(`tag`) || SHA256(`tag`) || `msg`).  The notation used
+here is `SIG(tag,msg,key)`.
+
 Each form is signed using one or more TLV signature elements; TLV types
-240 through 1000 are considered signature elements.
+240 through 1000 are considered signature elements.  For these the
+tag is `LnPrefix` | prefix, and `msg` is the merkle-root; 
+the prefix is the designated prefix listed below, e.g. `lno`.
 
-The only currently defined signature TLV is the [BIP-340] signature of
-the SHA256(`LnPrefix` | prefix | merkle-root), where prefix is the designated
-prefix, e.g. `lno`.
-
-The formulation is similar to that proposed in [BIP-taproot], with the
-insertion of alternate "dummy" leaves to avoid revealing adjacent
-nodes in proofs.
+The formulation of the merkle tree is similar to that proposed in
+[BIP-taproot], with the insertion of alternate "dummy" leaves to avoid
+revealing adjacent nodes in proofs.
 
 The Merkle Tree's leaves are, in TLV-ascending order:
 1. The SHA256 of: `LnLeaf` followed by the TLV entry.
@@ -159,7 +162,7 @@ Assume L1A2A > L3:
                            v          v
                 Root=SHA256('LnBranch'|L3|L1A2A)
 
-Signature = SIG(SHA256('LnPrefixlno' | Root), nodekey)
+Signature = SIG('LnPrefixlno', Root, nodekey)
 ```
 
 ## Rationale
