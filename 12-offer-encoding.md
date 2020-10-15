@@ -366,10 +366,12 @@ response to an offer (usually via an `onion_message` `invoice_request` field).
     1. type: 36 (`recurrence_counter`)
     2. data:
         * [`tu64`:`counter`]
-        * [`signature`:`counter_sig`]
     1. type: 38 (`payer_key`)
     2. data:
         * [`pubkey32`:`key`]
+    1. type: 50 (`recurrence_sig`)
+    2. data:
+        * [`signature`:`sig`]
 
 ## Requirements for Invoice Requests
 
@@ -401,7 +403,7 @@ The writer of an invoice_request:
     - for any successive requests:
       - MUST use the same `payer_key` as the initial request.
       - MUST set `recurrence_counter` `counter` to one greater than the highest-paid invoice.
-    - MUST set `recurrence_counter` `counter_sig` to
+    - MUST set `recurrence_sig` `sig` to
       SIG('lnr_recurrence_counter',`offer_id`||`counter`,`payer_key`).
     - SHOULD NOT send an `invoice_request` for a period which has
       already passed.
@@ -409,6 +411,7 @@ The writer of an invoice_request:
       immediate predecessor has not yet begun.
   - otherwise:
     - MUST NOT set `recurrence_counter`.
+    - MUST NOT set `recurrence_sig`.
   - if the invoice_request is for a partial or full refund for a previously-paid
     invoice:
     - SHOULD set `refunded_payment_hash` to the `payment_hash` of that
