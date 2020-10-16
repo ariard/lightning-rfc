@@ -435,8 +435,8 @@ A writer of an offer:
           period for which it will accept payment for that period.
         - SHOULD NOT set `seconds_after` to greater than the maximum number of
           seconds in a period.
-        - if it will proportionally reduce the amount charged for a period payed
-          after the start of the period:
+        - if it `amount` is specified and the node will proportionally reduce
+		  the amount charged for a period payed after the start of the period:
           - MUST set `proportional_amount` to 1 
         - otherwise:
           - MUST set `proportional_amount` to 0
@@ -570,12 +570,21 @@ The reader of an invoice_request:
     - FIXME: refunds and more!
   - otherwise:
     - MUST fail the request if the `offer_id` does not refer to an unexpired offer.
-    - MUST fail the request if `amount` is present.
     - if the offer had a `quantity_min` or `quantity_max` field:
       - MUST fail the request if there is no `quantity` field.
       - MUST fail the request if there is `quantity` is not within that (inclusive) range.
     - otherwise:
       - MUST fail the request if there is a `quantity` field.
+	- if the offer included `amount`:
+	  - MUST fail the request if it contains `amount`.
+	  - MUST calculate the invoice amount using the offer `amount`.
+	  - if offer `currency` is not the invoice currency, convert to the
+	    invoice currency.
+	  - if request contains `quantity`, multiply by `quantity`.
+    - otherwise:
+	  - MUST fail the request if it does not contain `amount`.
+	  - MUST use the request `amount` as the invoice amount.
+    (Note: invoice amount can be further modiifed by recurrence below)
     - if the offer had a `recurrence`:
       - MUST fail the request if there is no `recurrence_counter` field.
       - MUST fail the request if there is no `recurrence_signature` field.
