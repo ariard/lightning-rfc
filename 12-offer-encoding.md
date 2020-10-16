@@ -216,12 +216,19 @@ The designated prefix for offers is `lno`.
     1. type: 26 (`recurrence`)
     2. data:
         * [`byte`:`time_unit`]
-        * [`u32`:`period`]
-        * [`tu32`:`limit`]
+        * [`tu32`:`period`]
+    1. type: 64 (`recurrence_paywindow`)
+    2. data:
+        * [`u32`:`seconds_before`]
+        * [`byte`:`proportional_amount`]
+        * [`tu32`:`seconds_after`]
+    1. type: 66 (`recurrence_limit`)
+    2. data:
+        * [`tu32`:`max_period`]
     1. type: 28 (`recurrence_base`)
     2. data:
         * [`u32`:`basetime`]
-        * [`tu32`:`paywindow`]
+        * [`byte`:`start_any_period`]
     1. type: 30 (`node_id`)
     2. data:
         * [`pubkey32`:`node_id`]
@@ -253,16 +260,109 @@ different flavors of repetition, consider:
 Thus, each payment has:
 1. A `time_unit` defining 0 (seconds), 1 (days), 2 (months), 3 (years).
 2. A `period`, defining how often (in `time_unit`) it has to be paid.
-3. An optional `number` of total payments to be paid (0 meaning unlimited).
-4. An optional `basetime`, defining when the first payment applies
-   in seconds since 1970-01-01 UTC.
-5. An optional `paywindow`, defining how many seconds into the period
-   a payment will be accepted: 0xFFFFFFFF being a special value meaning
-   "any time during the period, but you will have to pay proportionally
-   to the remaining time in the period".
+3. An optional `recurrence_limit` of total payments to be paid.
+4. An optional `recurrence_base`:
+   * `basetime`, defining when the first period starts
+      in seconds since 1970-01-01 UTC.
+   * `start_any_period` if non-zero, meaning you don't have to start
+      paying at the period indicated by `basetime`, but can use
+      `recurrence_start` to indicate what period you are starting at.
+5. An optional `recurrence_paywindow`:
+   * `seconds_before`, defining how many seconds prior to the start of
+      the period a payment will be accepted.
+   * `proportional_amount`, if set indicating that a payment made during
+      the period itself will be charged proportionally to the remaining time
+      in the period (e.g. 150 seconds into a 1500 second period gives a 10%
+      discount).
+   * `seconds_after`, defining how many seconds after the start of the period
+      a payment will be accepted.
+  If this field is missing, payment will be accepted during the prior period and
+  the paid-for period.
 
 Note that the `expiry_timestamp` field already covers the case where an offer
 is no longer valid after January 1st 2021.
+
+## Offer Period Calculation
+
+Each period has a zero-based index, and a start time and an end time.
+Because the periods can be in non-seconds units, the duration of a
+period can depend on when it starts.  The period with index N+1 begins
+immediately following the end of period with index N.
+
+- if an offer contains `recurrence_base`:
+  - the start of period index 0 is `basetime` seconds since 1970-01-01 UTC.
+- otherwise:
+  - the start of period index 0 is the time of issuance of the first
+    `invoice` for this particular offer and `payer_key`.
+
+- if `time_unit` is 0:
+  - the period end is the period start plus `period`, in seconds.
+- otherwise, if `time_unit` is 1:
+  - calculate the offset in seconds within the day of the period start.
+  - add `period` days to get the day of the period end.
+  - add the offset in seconds to get the period end in seconds.
+    - if the result is not within the same day, use the last second in the day.
+- otherwise, if `time_unit` is 2:
+  - calculate the offset in days within the month of the period start.
+  - calculate the offset in seconds within the day of the period start.
+  - add `period` months to get the month of the period end.
+  - add the offset days to get the day of the period end.
+    - if the day is not within the month, use the last day within the month.
+  - add the offset seconds to get the period end in seconds.
+    - if the result is not within the same day, use the last second in the day.
+- otherwise, if `time_unit` is 3:
+  - calculate the offset in months within the year of the period start.
+  - calculate the offset in days within the month of the period start.
+  - calculate the offset in seconds within the day of the period start.
+  - add `period` years to get the year of the period end.
+  - add the offset months to get the month of the period end.
+  - add the offset days to get the day of the period end.
+    - if the day is not within the month, use the last day within the month.
+  - add the offset seconds to get the period end in seconds.
+    - if the result is not within the same day, use the last second in the day.
+- otherwise, the time is invalid.
+
+Note that offset seconds can overflow only if the period start is in a
+leap second.
+
+If a period starts at 10:00:00 (am) UTC on 31 December, 1970 (31485600
+seconds since epoch), the following demonstrates period ends:
+* time_unit 0:
+  - period 1: 31 Dec 1970 10:00:01 UTC (31485601)
+  - period 10: 31 Dec 1970 10:00:10 UTC (31485610)
+  - period 100: 31 Dec 1970 10:01:40 UTC (31485700)
+  - period 1000: 31 Dec 1970 10:16:40 UTC (31486600)
+* time_unit 1:
+  - period 1: 1 Jan 1971 10:00:00 UTC (31572000)
+  - period 10: 10 Jan 1971 10:00:00 UTC (32349600)
+  - period 100: 10 Apr 1971 10:00:00 UTC (40125600)
+  - period 1000: 26 Sep 1973 10:00:00 UTC (117885600)
+* time_unit 2:
+  - period 1: 31 Jan 1971 10:00:00 UTC (34164000)
+  - period 10: 31 Oct 1971 10:00:00 UTC (57751200)
+  - period 100: 30 Apr 1975 10:00:00 UTC (168084000)
+* time_unit 3:
+  - period 1: 31 Dec 1971 10:00:00 UTC (63021600)
+  - period 10: 31 Dec 1980 10:00:00 UTC (347104800)
+
+If a period starts at 10:00:00 (am) UTC on 29 February, 2016 (1456740000):
+* time_unit 0:
+  - period 1: 29 Feb 2016 10:00:01 UTC (1456740001)
+  - period 10: 29 Feb 2016 10:00:10 UTC (1456740010)
+  - period 100: 29 Feb 2016 10:01:40 UTC (1456740100)
+  - period 1000: 29 Feb 2016 10:16:40 UTC (1456741000)
+* time_unit 1:
+  - period 1: 1 Mar 2016 10:00:00 UTC (1456826400)
+  - period 10: 10 Mar 2016 10:00:00 UTC (1457604000)
+  - period 100: 08 Jun 2016 10:00:00 UTC (1465380000)
+  - period 1000: 25 Nov 2018 10:00:00 UTC (1543140000)
+* time_unit 2:
+  - period 1: 29 Mar 2016 10:00:00 UTC (1459245600)
+  - period 10: 29 Sep 2016 10:00:00 UTC (1475143200)
+  - period 100: 29 Jun 2024 10:00:00 UTC (1719655200)
+* time_unit 3:
+  - period 1: 28 Feb 2017 10:00:00 UTC (1488276000)
+  - period 10: 28 Feb 2026 10:00:00 UTC (1772272800)
 
 ## Requirements For Offers
 
@@ -311,13 +411,39 @@ A writer of an offer:
       - MUST set `time_unit` to 0 (seconds), 1 (days), 2 (months), 3 (years).
       - MUST set `period` to how often (per `time-unit`) it wants to be paid.
       - if there is a maximum number of payments:
-        - MUST set `limit` to the maximum number of payments
-      - otherwise
-        - MUST set `limit` to 0.
-      - MAY include `recurrence_base` if invoices are expected at
-        particular time offsets.
+        - MUST include `recurrence_limit` with `max_period` set to the maximum number of payments
+        - MUST NOT set `max_period` to 0.
+      - otherwise:
+        - MUST NOT include `recurrence_limit`.
+      - if periods are always at specific time offsets:
+        - MUST include `recurrence_base`
+        - MUST set `basetime` to the initial period time in number of
+          seconds after midnight 1 January 1970
+        - if the first paid-for-period does not have to be the initial period:
+          - MUST set `start_any_period` to 1.
+        - otherwise:
+          - MUST set `start_any_period` to 0.
+      - otherwise:
+        - MUST NOT include `recurrence_base`.
+      - if payments for the current or next period:
+        - MAY not include `recurrence_paywindow`
+      - otherwise:
+        - MUST include `recurrence_paywindow`
+        - MUST set `seconds_before` to the maximum number of seconds prior to
+          a period for which it will accept payment for that period.
+        - MUST set `seconds_after` to the maximum number of seconds into to a
+          period for which it will accept payment for that period.
+        - SHOULD NOT set `seconds_after` to greater than the maximum number of
+          seconds in a period.
+        - if it will proportionally reduce the amount charged for a period payed
+          after the start of the period:
+          - MUST set `proportional_amount` to 1 
+        - otherwise:
+          - MUST set `proportional_amount` to 0
   - otherwise:
     - MUST NOT include `recurrence_base`.
+    - MUST NOT include `recurrence_paywindow`.
+    - MUST NOT include `recurrence_limit`.
 
 A reader of an offer:
   - SHOULD gain user consent for recurring payments.
@@ -365,11 +491,14 @@ response to an offer (usually via an `onion_message` `invoice_request` field).
         * [`sha256`:`refunded_payment_hash`]
     1. type: 36 (`recurrence_counter`)
     2. data:
-        * [`tu64`:`counter`]
+        * [`tu32`:`counter`]
+    1. type: 68 (`recurrence_start`)
+    2. data:
+        * [`tu32`:`period_offset`]
     1. type: 38 (`payer_key`)
     2. data:
         * [`pubkey32`:`key`]
-    1. type: 50 (`recurrence_sig`)
+    1. type: 242 (`recurrence_signature`)
     2. data:
         * [`signature`:`sig`]
 
@@ -403,15 +532,28 @@ The writer of an invoice_request:
     - for any successive requests:
       - MUST use the same `payer_key` as the initial request.
       - MUST set `recurrence_counter` `counter` to one greater than the highest-paid invoice.
-    - MUST set `recurrence_sig` `sig` to
-      SIG('lnr_recurrence_counter',`offer_id`||`counter`,`payer_key`).
+    - if the offer contained `recurrence_base` with `start_any_period` non-zero:
+      - MUST include `recurrence_start`
+      - MUST set `period_offset` to the period the sender wants for the initial request
+      - MUST set `period_offset` to the same value on all following requests.
+    - otherwise:
+      - MUST NOT include `recurrence_start`
+    - MUST set `recurrence_signature` `sig` as detailed in
+      [Signature Calculation](#signature-calculation) using the `payer_key` 
+      and prefix 'recurrence_signature'.
     - SHOULD NOT send an `invoice_request` for a period which has
       already passed.
-    - SHOULD NOT send an `invoice_request` for a period whose
-      immediate predecessor has not yet begun.
+    - if the offer contains `recurrence_paywindow`:
+      - SHOULD NOT send an `invoice_request` for a period prior to `seconds_before` seconds before that period start.
+      - SHOULD NOT send an `invoice_request` for a period later than `seconds_after` seconds past that period start.
+    - otherwise:
+      - SHOULD NOT send an `invoice_request` with `recurrence_counter`
+        is non-zero for a period whose immediate predecessor has not
+        yet begun.
   - otherwise:
     - MUST NOT set `recurrence_counter`.
-    - MUST NOT set `recurrence_sig`.
+    - MUST NOT set `recurrence_signature`.
+    - MUST NOT set `recurrence_start`
   - if the invoice_request is for a partial or full refund for a previously-paid
     invoice:
     - SHOULD set `refunded_payment_hash` to the `payment_hash` of that
@@ -419,17 +561,62 @@ The writer of an invoice_request:
   - otherwise:
     - MUST NOT set `refunded_payment_hash`.
 
+The reader of an invoice_request:
+  - MUST fail the request if `payer_key` is not present.
+  - MUST fail the request if `chains` does not include (or imply) a supported chain.
+  - MUST fail the request if `features` contains unknown even bits.
+  - if `offer_id` is not present:
+    - MUST fail the request if `description` is not present.
+    - FIXME: refunds and more!
+  - otherwise:
+    - MUST fail the request if the `offer_id` does not refer to an unexpired offer.
+    - MUST fail the request if `amount` is present.
+    - if the offer had a `quantity_min` or `quantity_max` field:
+      - MUST fail the request if there is no `quantity` field.
+      - MUST fail the request if there is `quantity` is not within that (inclusive) range.
+    - otherwise:
+      - MUST fail the request if there is a `quantity` field.
+    - if the offer had a `recurrence`:
+      - MUST fail the request if there is no `recurrence_counter` field.
+      - MUST fail the request if there is no `recurrence_signature` field.
+      - MUST fail the request if `recurrence_signature` is not correct.
+      - if the offer had `recurrence_base` and `start_any_period` was 1:
+        - MUST fail the request if there is no `recurrence_start` field.
+        - MUST consider the period index for this request to be the
+          `recurrence_start` field plus the `recurrence_counter` `counter`
+          field.
+      - otherwise:
+        - MUST fail the request if there is a `recurrence_start` field.
+        - MUST consider the period index for this request to be the
+          `recurrence_counter` `counter` field.
+      - if the offer has a `recurrence_limit`:
+        - MUST fail the request if the period index is greater than `max_period`.
+      - MUST calculate the period using the period index as detailed in [Period Calculation](#offer-period-calculation).
+      - if `recurrence_counter` is non-zero:
+        - MUST fail the request if the no invoice for the previous period
+          has been paid.
+        - if the offer had a `recurrence_paywindow`:
+          - SHOULD fail the request if the current time is before the start of
+            the period minus `seconds_before`.
+          - SHOULD fail the request if the current time is equal to or after the
+            start of the period plus `seconds_after`.
+          - if `proportional_amount` is 1:
+            - MUST adjust the invoice amount proportional to time remaining in
+              the period.
+        - otherwise:
+          - if `counter` is non-zero:
+            - SHOULD fail the request if the current time is prior to the start
+              of the previous period.
+
 ## Rationale
 
 We insist that recurring requests be in order (thus, if you pay an
 invoice for #34 of a recurring offer, it implicitly commits to the
 successful payment of #0 through #33).
 
-We also insist that you don't get more than 1 ahead; for example, if
-the period is 1 minute, you can immediately request invoice #0, pay
-it, then request #1 even though we're currently in period #0.  This
-provides some slack, without allowing commitments into the far far
-future.
+The `recurrence_paywindow` constrains how far you can pay in advance
+precisely, and if it isn't in the offer the defaults provide some
+slack, without allowing commitments into the far future.
 
 To avoid probing (should a payer_key become public in some way), we
 require a signature for recurring invoice requests; this ensures that
@@ -481,6 +668,9 @@ to an `invoice_request` using `onion_message` `invoice` field.
     1. type: 36 (`recurrence_counter`)
     2. data:
        * [`tu64`:`counter`]
+    1. type: 68 (`recurrence_start`)
+    2. data:
+        * [`tu32`:`period_offset`]
     1. type: 38 (`payer_key`)
     2. data:
         * [`pubkey32`:`key`]
@@ -570,6 +760,7 @@ A writer of an invoice:
   - MUST set (or not set) `quantity` exactly as the invoice_request did.
   - MUST set (or not set) `refund_for` exactly as the invoice_request did.
   - MUST set (or not set) `recurrence_counter` exactly as the invoice_request did.
+  - MUST set (or not set) `recurrence_start` exactly as the invoice_request did.
   - MUST set `payer_key` exactly as the invoice_request did.
   - if it sets `refund_for`:
     - MUST set `refund_signature` to the signature of the
