@@ -679,7 +679,7 @@ to an `invoice_request` using `onion_message` `invoice` field.
         * [`sha256`:`refunded_payment_hash`]
     1. type: 36 (`recurrence_counter`)
     2. data:
-       * [`tu64`:`counter`]
+       * [`tu32`:`counter`]
     1. type: 68 (`recurrence_start`)
     2. data:
         * [`tu32`:`period_offset`]
