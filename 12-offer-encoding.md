@@ -424,10 +424,11 @@ A writer of an offer:
           - MUST set `start_any_period` to 0.
       - otherwise:
         - MUST NOT include `recurrence_base`.
-      - if payments for the current or next period:
-        - MAY not include `recurrence_paywindow`
+      - if payments will be accepted for the current or next period:
+        - MAY include `recurrence_paywindow`
       - otherwise:
         - MUST include `recurrence_paywindow`
+      - if it includes `recurrence_paywindow`:
         - MUST set `seconds_before` to the maximum number of seconds prior to
           a period for which it will accept payment for that period.
         - MUST set `seconds_after` to the maximum number of seconds into to a
@@ -742,7 +743,10 @@ A writer of an invoice:
     - the bitcoin chain is implied as the first and only entry.
   - if it has bolt9 features:
     - MUST set `features` to the bitmap of features.
-  - if the expiry for accepting payment is not 604800 seconds after `timestamp`:
+  - if the invoice corresponds to an offer with `recurrence`:
+    - SHOULD set `expiry` to the number of seconds after `timestamp` that
+      payment for this period will no longer be accepted.
+  - if the expiry for accepting payment is not 7200 seconds after `timestamp`:
     - MUST set `expiry` to the number of seconds after `timestamp`
       that payment should not be attempted.
   - if the `min_final_cltv_expiry` for the last HTLC in the route is not 9:
