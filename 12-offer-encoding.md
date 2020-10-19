@@ -290,40 +290,39 @@ period can depend on when it starts.  The period with index N+1 begins
 immediately following the end of period with index N.
 
 - if an offer contains `recurrence_base`:
-  - the start of period index 0 is `basetime` seconds since 1970-01-01 UTC.
+  - the start of period #0 is `basetime` seconds since 1970-01-01 UTC.
 - otherwise:
-  - the start of period index 0 is the time of issuance of the first
+  - the start of period #0 is the time of issuance of the first
     `invoice` for this particular offer and `payer_key`.
 
+To calculate the start of period #`N` for `N` > 0:
 - if `time_unit` is 0:
-  - the period end is the period start plus `period`, in seconds.
+  - period `N` starts at period #0 start plus `period` multiplied by `N`,
+    in seconds.
 - otherwise, if `time_unit` is 1:
-  - calculate the offset in seconds within the day of the period start.
-  - add `period` days to get the day of the period end.
+  - calculate the offset in seconds within the day of period #0 start.
+  - add `period` multiplied by `N` days to get the day of the period start.
   - add the offset in seconds to get the period end in seconds.
-    - if the result is not within the same day, use the last second in the day.
 - otherwise, if `time_unit` is 2:
-  - calculate the offset in days within the month of the period start.
-  - calculate the offset in seconds within the day of the period start.
-  - add `period` months to get the month of the period end.
-  - add the offset days to get the day of the period end.
+  - calculate the offset in days within the month of period #0 start.
+  - calculate the offset in seconds within the day of period #0 start.
+  - add `period` multiplied by `N` months to get the month of the period start.
+  - add the offset days to get the day of the period start.
     - if the day is not within the month, use the last day within the month.
-  - add the offset seconds to get the period end in seconds.
-    - if the result is not within the same day, use the last second in the day.
+  - add the offset seconds to get the period start in seconds.
 - otherwise, if `time_unit` is 3:
-  - calculate the offset in months within the year of the period start.
-  - calculate the offset in days within the month of the period start.
-  - calculate the offset in seconds within the day of the period start.
-  - add `period` years to get the year of the period end.
-  - add the offset months to get the month of the period end.
-  - add the offset days to get the day of the period end.
+  - calculate the offset in months within the year of period #0 start.
+  - calculate the offset in days within the month of period #0 start.
+  - calculate the offset in seconds within the day of period #0 start.
+  - add `period` multiplied by `N` years to get the year of the period start.
+  - add the offset months to get the month of the period start.
+  - add the offset days to get the day of the period start.
     - if the day is not within the month, use the last day within the month.
-  - add the offset seconds to get the period end in seconds.
-    - if the result is not within the same day, use the last second in the day.
+  - add the offset seconds to get the period start in seconds.
 - otherwise, the time is invalid.
 
 Note that offset seconds can overflow only if the period start is in a
-leap second.
+leap second; we ignore this!
 
 If a period starts at 10:00:00 (am) UTC on 31 December, 1970 (31485600
 seconds since epoch), the following demonstrates period ends:
@@ -436,7 +435,7 @@ A writer of an offer:
         - SHOULD NOT set `seconds_after` to greater than the maximum number of
           seconds in a period.
         - if it `amount` is specified and the node will proportionally reduce
-		  the amount charged for a period payed after the start of the period:
+          the amount charged for a period payed after the start of the period:
           - MUST set `proportional_amount` to 1 
         - otherwise:
           - MUST set `proportional_amount` to 0
@@ -575,15 +574,15 @@ The reader of an invoice_request:
       - MUST fail the request if there is `quantity` is not within that (inclusive) range.
     - otherwise:
       - MUST fail the request if there is a `quantity` field.
-	- if the offer included `amount`:
-	  - MUST fail the request if it contains `amount`.
-	  - MUST calculate the invoice amount using the offer `amount`.
-	  - if offer `currency` is not the invoice currency, convert to the
-	    invoice currency.
-	  - if request contains `quantity`, multiply by `quantity`.
+    - if the offer included `amount`:
+      - MUST fail the request if it contains `amount`.
+      - MUST calculate the invoice amount using the offer `amount`.
+      - if offer `currency` is not the invoice currency, convert to the
+        invoice currency.
+      - if request contains `quantity`, multiply by `quantity`.
     - otherwise:
-	  - MUST fail the request if it does not contain `amount`.
-	  - MUST use the request `amount` as the invoice amount.
+      - MUST fail the request if it does not contain `amount`.
+      - MUST use the request `amount` as the invoice amount.
     (Note: invoice amount can be further modiifed by recurrence below)
     - if the offer had a `recurrence`:
       - MUST fail the request if there is no `recurrence_counter` field.
@@ -616,6 +615,9 @@ The reader of an invoice_request:
           - if `counter` is non-zero:
             - SHOULD fail the request if the current time is prior to the start
               of the previous period.
+    - otherwise (the offer had no `recurrence`):
+      - MUST fail the request if there is a `recurrence_counter` field.
+      - MUST fail the request if there is a `recurrence_signature` field.
 
 ## Rationale
 
