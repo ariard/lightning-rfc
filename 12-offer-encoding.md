@@ -198,9 +198,9 @@ The designated prefix for offers is `lno`.
     1. type: 12 (`features`)
     2. data:
         * [`...*byte`:`features`]
-    1. type: 14 (`expiry_timestamp`)
+    1. type: 14 (`absolute_expiry`)
     2. data:
-        * [`tu64`:`expiry_timestamp`]
+        * [`tu64`:`seconds_from_epoch`]
     1. type: 16 (`paths`)
     2. data:
         * [`...*blinded_path`:`paths`]
@@ -279,7 +279,7 @@ Thus, each payment has:
   If this field is missing, payment will be accepted during the prior period and
   the paid-for period.
 
-Note that the `expiry_timestamp` field already covers the case where an offer
+Note that the `absolute_expiry` field already covers the case where an offer
 is no longer valid after January 1st 2021.
 
 ## Offer Period Calculation
@@ -387,8 +387,9 @@ A writer of an offer:
   - if it supports offer features:
     - SHOULD set `features` to the bitmap of offer features.
   - if the offer expires:
-    - MUST set `expiry_timestamp` to the number of seconds after midnight 1
-      January 1970, UTC that invoice_request should not be attempted.
+    - MUST set `absolute_expiry` `seconds_from_epoch` to the number of seconds
+      after midnight 1 January 1970, UTC that invoice_request should not be
+      attempted.
   - if it is connected only by private channels:
     - MUST include `paths` containing one or more paths to the node from
       publicly reachable nodes.
@@ -692,9 +693,9 @@ to an `invoice_request` using `onion_message` `invoice` field.
     1. type: 42 (`payment_hash`)
     2. data:
         * [`sha256`:`payment_hash`]
-    1. type: 44 (`expiry`)
+    1. type: 44 (`relative_expiry`)
     2. data:
-        * [`tu32`:`expiry_seconds`]
+        * [`tu32`:`seconds_from_timestamp`]
     1. type: 46 (`cltv`)
     2. data:
         * [`tu32`:`min_final_cltv_expiry`]
@@ -744,11 +745,13 @@ A writer of an invoice:
   - if it has bolt9 features:
     - MUST set `features` to the bitmap of features.
   - if the invoice corresponds to an offer with `recurrence`:
-    - SHOULD set `expiry` to the number of seconds after `timestamp` that
-      payment for this period will no longer be accepted.
-  - if the expiry for accepting payment is not 7200 seconds after `timestamp`:
-    - MUST set `expiry` to the number of seconds after `timestamp`
-      that payment should not be attempted.
+    - MUST set `relative_expiry` `seconds_from_timestamp` to the number of
+      seconds after `timestamp` that payment for this period will no longer be
+      accepted.
+  - otherwise:
+    - if the expiry for accepting payment is not 7200 seconds after `timestamp`:
+      - MUST set `relative_expiry` `seconds_from_timestamp` to the number of
+        seconds after `timestamp` that payment should not be attempted.
   - if the `min_final_cltv_expiry` for the last HTLC in the route is not 9:
     - MUST set `min_final_cltv_expiry`.
   - if it accepts onchain payments:
