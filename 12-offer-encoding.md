@@ -496,6 +496,9 @@ response to an offer (usually via an `onion_message` `invoice_request` field).
     1. type: 38 (`payer_key`)
     2. data:
         * [`pubkey32`:`key`]
+    1. type: 50 (`payer_info`)
+    2. data:
+        * [`...*byte`:`blob`]
     1. type: 242 (`recurrence_signature`)
     2. data:
         * [`signature`:`sig`]
@@ -536,6 +539,7 @@ The writer of an invoice_request:
       - MUST set `period_offset` to the same value on all following requests.
     - otherwise:
       - MUST NOT include `recurrence_start`
+    - MAY set `payer_info` to arbitrary data to be reflected into the invoice.
     - MUST set `recurrence_signature` `sig` as detailed in
       [Signature Calculation](#signature-calculation) using the `payer_key` 
       and prefix 'recurrence_signature'.
@@ -684,6 +688,9 @@ to an `invoice_request` using `onion_message` `invoice` field.
     1. type: 38 (`payer_key`)
     2. data:
         * [`pubkey32`:`key`]
+    1. type: 50 (`payer_info`)
+    2. data:
+        * [`...*byte`:`blob`]
     1. type: 40 (`timestamp`)
     2. data:
         * [`tu32`:`timestamp`]
@@ -777,6 +784,7 @@ A writer of an invoice:
   - MUST set (or not set) `recurrence_counter` exactly as the invoice_request did.
   - MUST set (or not set) `recurrence_start` exactly as the invoice_request did.
   - MUST set `payer_key` exactly as the invoice_request did.
+  - MUST set (or not set) `payer_info` exactly as the invoice_request did.
   - if it sets `refund_for`:
     - MUST set `refund_signature` to the signature of the
       `refunded_payment_hash` using the `payer_key`.
