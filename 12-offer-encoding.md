@@ -181,7 +181,7 @@ The designated prefix for offers is `lno`.
 
 ## TLV Fields for Offers
 
-1. tlvs: `offer_tlvs`
+1. tlvs: `offer`
 2. types:
     1. type: 2 (`chains`)
     2. data:
@@ -464,7 +464,7 @@ response to an offer (usually via an `onion_message` `invoice_request` field).
 
 ## TLV Fields for `invoice_request`
 
-1. tlvs: `invoice_request_tlvs`
+1. tlvs: `invoice_request`
 2. types:
     1. type: 2 (`chains`)
     2. data:
@@ -481,9 +481,6 @@ response to an offer (usually via an `onion_message` `invoice_request` field).
     1. type: 12 (`features`)
     2. data:
         * [`...*byte`:`features`]
-    1. type: 16 (`paths`)
-    2. data:
-        * [`...*blinded_path`:`paths`]
     1. type: 32 (`quantity`)
     2. data:
         * [`tu64`:`quantity`]
@@ -643,7 +640,7 @@ it can be combined with the invoice to form a cryptographic receipt.
 The designated prefix for invoices is `lni`.  It can be sent in response
 to an `invoice_request` using `onion_message` `invoice` field.
 
-1. tlvs: `invoice_tlvs`
+1. tlvs: `invoice`
 2. types:
     1. type: 2 (`chains`)
     2. data:
