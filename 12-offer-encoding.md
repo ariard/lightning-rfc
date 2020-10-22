@@ -742,7 +742,7 @@ A writer of an invoice:
     - MUST specify `chains` the offer is valid for.
   - otherwise:
     - the bitcoin chain is implied as the first and only entry.
-  - if it has bolt9 features:
+  - if it has bolt11 features:
     - MUST set `features` to the bitmap of features.
   - if the invoice corresponds to an offer with `recurrence`:
     - MUST set `relative_expiry` `seconds_from_timestamp` to the number of
@@ -752,7 +752,7 @@ A writer of an invoice:
     - if the expiry for accepting payment is not 7200 seconds after `timestamp`:
       - MUST set `relative_expiry` `seconds_from_timestamp` to the number of
         seconds after `timestamp` that payment should not be attempted.
-  - if the `min_final_cltv_expiry` for the last HTLC in the route is not 9:
+  - if the `min_final_cltv_expiry` for the last HTLC in the route is not 18:
     - MUST set `min_final_cltv_expiry`.
   - if it accepts onchain payments:
     - MAY specify `fallbacks`
