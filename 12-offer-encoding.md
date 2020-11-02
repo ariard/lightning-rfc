@@ -447,11 +447,20 @@ A writer of an offer:
     - MUST NOT include `recurrence_limit`.
 
 A reader of an offer:
+  - if `features` contains unknown _odd_ bits that are non-zero:
+    - MUST ignore the bit.
+  - if `features` contains unknown _even_ bits that are non-zero:
+    - MUST NOT respond to the offer.
+    - SHOULD indicate the unknown bit to the user.
+  - if `node_id` is not set:
+    - MUST NOT respond to the offer.
   - SHOULD gain user consent for recurring payments.
   - SHOULD allow user to view and cancel recurring payments.
   - if it uses `amount` to provide the user with a cost estimate:
     - MUST warn user if amount of actual invoice differs significantly
         from that expectation.
+  - SHOULD not respond to an offer if the current time is after
+    `absolute_expiry`.
   - FIXME: more!
 
 # Invoice Requests
@@ -636,6 +645,12 @@ To avoid probing (should a payer_key become public in some way), we
 require a signature for recurring invoice requests; this ensures that
 no third party can determine how many invoices have been paid already.
 
+`payer_info` might typically contain information about the derivation of the
+`payer_key`.  This should not leak any information (such as using a simple
+BIP-32 derivation path); a valid system might be for a node to maintain a base
+payer key, and encode a 128-bit tweak here.  The payer_key would be derived by
+tweaking the base key with SHA256(payer_base_pubkey || tweak).
+
 # Invoices
 
 Invoices are a request for payment, and when the payment is made they
@@ -803,6 +818,8 @@ A writer of an invoice:
 
 A reader of an invoice:
 
+  - MUST check that the `payer_key` matches the `invoice_request`.
+  - MUST check that the `payer_info` matches the `invoice_request`.
   - FIXME
 
 ## Rationale
@@ -817,6 +834,9 @@ The invoice duplicates fields rather than committing to the previous offer or
 invoice_request.  This flattened format simplifies storage at some space cost, as
 the payer need only remember the invoice for any refunds or proof.
 
+The reader of the invoice cannot trust the invoice correctly reflects the
+offer and invoice_request fields, hence the requirements to check that they
+are correct.
 
 FIXME: Possible future extensions:
 
