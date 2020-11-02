@@ -95,7 +95,7 @@ The use of bech32 is arbitrary, but already exists in the bitcoin
 world.  We omit the six-character trailing checksum since all uses
 here involve a signature.
 
-The use of `+` (which is ignored) allows use of invoices over limited
+The use of `+` (which is ignored) allows use over limited
 text fields like Twitter:
 
 ```
@@ -700,6 +700,9 @@ to an `invoice_request` using `onion_message` `invoice` field.
     1. type: 68 (`recurrence_start`)
     2. data:
         * [`tu32`:`period_offset`]
+    1. type: 64 (`recurrence_basetime`)
+    2. data:
+        * [`u32`:`basetime`]
     1. type: 38 (`payer_key`)
     2. data:
         * [`pubkey32`:`key`]
@@ -708,7 +711,7 @@ to an `invoice_request` using `onion_message` `invoice` field.
         * [`...*byte`:`blob`]
     1. type: 40 (`timestamp`)
     2. data:
-        * [`tu32`:`timestamp`]
+        * [`tu64`:`timestamp`]
     1. type: 42 (`payment_hash`)
     2. data:
         * [`sha256`:`payment_hash`]
@@ -758,16 +761,19 @@ A writer of an invoice:
   - MUST specify exactly one signature TLV: `signature`.
     - MUST set `sig` to the signature using `node_id` as described in [Signature Calculation](#signature-calculation).
   - if the chain for the invoice is not solely bitcoin:
-    - MUST specify `chains` the offer is valid for.
+    - MUST specify `chains` the invoice is valid for.
   - otherwise:
     - the bitcoin chain is implied as the first and only entry.
   - if it has bolt11 features:
     - MUST set `features` to the bitmap of features.
   - if the invoice corresponds to an offer with `recurrence`:
+    - MUST set `recurrence_basetime` to the start of period #0 as calculated
+	  by [Period Calculation](#offer-period-calculation).
     - MUST set `relative_expiry` `seconds_from_timestamp` to the number of
       seconds after `timestamp` that payment for this period will no longer be
       accepted.
   - otherwise:
+    - MUST not set `recurrence_basetime`.
     - if the expiry for accepting payment is not 7200 seconds after `timestamp`:
       - MUST set `relative_expiry` `seconds_from_timestamp` to the number of
         seconds after `timestamp` that payment should not be attempted.
@@ -817,10 +823,35 @@ A writer of an invoice:
       the offer, and `quantity` from the invoice_request.
 
 A reader of an invoice:
-
-  - MUST check that the `payer_key` matches the `invoice_request`.
-  - MUST check that the `payer_info` matches the `invoice_request`.
-  - FIXME
+  - MUST reject the invoice if `signature` is not a valid signature using `node_id` as described in [Signature Calculation](#signature-calculation).
+  - MUST reject the invoice if `msat` is not present.
+  - if the invoice is a reply to an `invoice_request`:
+     - MUST reject the invoice if `msat` was specified by `invoice_request`
+       and the invoice `msat` does not exactly equal that.
+     - MUST reject the invoice unless the following fields are equal or unset
+       exactly as they are in the `invoice_request:`
+       - `offer_id`
+       - `quantity`
+       - `recurrence_counter`
+       - `recurrence_start`
+       - `payer_key`
+       - `payer_info`
+       - `refund_for`
+     - if the `invoice_request` contained an `offer_id`:
+       - MUST reject the invoice unless `node_id` is equal to the `node_id`
+         in the offer.
+       - SHOULD confirm authorization if the `description` does not exactly
+         match the `offer`
+         - MAY highlight if `description` has simply had a change appended.
+       - SHOULD confirm authorization if `vendor` does not exactly
+         match the `offer`
+       - if the offer contained an `amount`:
+         - if the offer did not specify `currency`:
+           - MUST reject the invoice if `msat` does not exactly match
+             amount in the offer multiplied by `quantity` (if any).
+         - otherwise:
+           - SHOULD confirm authorization if `msat` is not reasonably close
+             to the amount authorized.
 
 ## Rationale
 
@@ -834,9 +865,38 @@ The invoice duplicates fields rather than committing to the previous offer or
 invoice_request.  This flattened format simplifies storage at some space cost, as
 the payer need only remember the invoice for any refunds or proof.
 
+The recurrence_basetime similarly enables calculation of the next period
+without having to refer to the initial invoice (in the case where the
+offer does not contain `recurrence_base`.
+
 The reader of the invoice cannot trust the invoice correctly reflects the
 offer and invoice_request fields, hence the requirements to check that they
 are correct.
+
+If there's been no currency change, the amount should similarly be
+reflected exactly.  If there has been a conversion, it's useful to
+accept some difference of exchange rate without requiring additional
+authorization: this definitions of reasonable are left to the
+implementation.
+
+For example, consider an offer with weekly recurrence (`time_unit`=1,
+`period`=7), `amount` 500, `currency` `AUD` ($5 Australian dollars).
+An implementation may present this to the user as USD $3.53 (max
+$3.71), to allow up to 5% exchange slippage, and receive their
+approval.  As it received each invoice, it would convert the `msat`
+into USD to check that it was below the maximum authorization of
+USD$3.71.  If it was, it would not require reapproval to pay the
+invoice.
+
+On the other hand, if it did exceed the authorization, it would
+request reauthorization.  It could also indicate whether it was due to
+AUD/USD changes (since the offer indicated that was the currency it
+was using) or a disagreement on the bitcoin exchange rate.
+
+Note that the problem is simpler for non-recurring offers, where
+authorization may simply be delayed until the invoice is received and
+the exact amount is known.  Also, the implementation of a trusted
+exchange rate service is left to the reader.
 
 FIXME: Possible future extensions:
 
@@ -845,5 +905,7 @@ FIXME: Possible future extensions:
    perhaps with a signature from the original node_id
 3. Any empty TLV fields can mean the value is supposed to be known by
    other means (i.e. transport-specific), but is still hashed for sig.
+4. We could upgrade to allow multiple offers in one invoice_request and
+   invoice, to make a shopping list.
 
 [1] https://www.youtube.com/watch?v=4SYc_flMnMQ
