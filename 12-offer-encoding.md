@@ -227,8 +227,8 @@ The designated prefix for offers is `lno`.
         * [`tu32`:`max_period`]
     1. type: 28 (`recurrence_base`)
     2. data:
-        * [`u32`:`basetime`]
         * [`byte`:`start_any_period`]
+        * [`tu64`:`basetime`]
     1. type: 30 (`node_id`)
     2. data:
         * [`pubkey32`:`node_id`]
@@ -702,7 +702,7 @@ to an `invoice_request` using `onion_message` `invoice` field.
         * [`tu32`:`period_offset`]
     1. type: 64 (`recurrence_basetime`)
     2. data:
-        * [`u32`:`basetime`]
+        * [`tu64`:`basetime`]
     1. type: 38 (`payer_key`)
     2. data:
         * [`pubkey32`:`key`]
