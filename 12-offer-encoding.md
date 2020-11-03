@@ -395,6 +395,8 @@ A writer of an offer:
       publicly reachable nodes.
   - otherwise:
     - MAY include `paths`.
+  - if it includes `paths`:
+    - SHOULD ignore any invoice_request which does not use the path.
   - if it sets `vendor`:
     - MUST set it to a valid UTF-8 string.
     - SHOULD set it to clearly identify the issuer of the invoice.
@@ -768,7 +770,7 @@ A writer of an invoice:
     - MUST set `features` to the bitmap of features.
   - if the invoice corresponds to an offer with `recurrence`:
     - MUST set `recurrence_basetime` to the start of period #0 as calculated
-	  by [Period Calculation](#offer-period-calculation).
+      by [Period Calculation](#offer-period-calculation).
     - MUST set `relative_expiry` `seconds_from_timestamp` to the number of
       seconds after `timestamp` that payment for this period will no longer be
       accepted.
@@ -797,6 +799,7 @@ A writer of an invoice:
       it has a preference.
     - MUST include `blinded_payinfo` with exactly one `payinfo` for
       each `onionmsg_path` in `blinded_path`, in order.
+    - SHOULD ignore any payment which does not use one of the paths.
   - otherwise:
     - MUST NOT include `blinded_payinfo`.
   - MUST set (or not set) `offer_id` exactly as the invoice_request did.
@@ -883,7 +886,7 @@ For example, consider an offer with weekly recurrence (`time_unit`=1,
 `period`=7), `amount` 500, `currency` `AUD` ($5 Australian dollars).
 An implementation may present this to the user as USD $3.53 (max
 $3.71), to allow up to 5% exchange slippage, and receive their
-approval.  As it received each invoice, it would convert the `msat`
+authorization.  As it received each invoice, it would convert the `msat`
 into USD to check that it was below the maximum authorization of
 USD$3.71.  If it was, it would not require reapproval to pay the
 invoice.
@@ -907,5 +910,9 @@ FIXME: Possible future extensions:
    other means (i.e. transport-specific), but is still hashed for sig.
 4. We could upgrade to allow multiple offers in one invoice_request and
    invoice, to make a shopping list.
+5. Allow amount override on invreq, even if specified.
+6. Allow amount change in invoice, even if specified.
+7. All-zero offer_id == gratuitous payment.
+8. Recurrent invoice requests?
 
 [1] https://www.youtube.com/watch?v=4SYc_flMnMQ
