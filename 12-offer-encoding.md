@@ -86,8 +86,12 @@ The supported ASCII encoding is the designated prefix, followed by a
 optionally interspersed with `+` (for indicating additional data is to
 come).
 
-FIXME: Encoding/decoding requirements.
-- Any required padding bits are set to zero / reject if not zero.
+## Requirements
+
+Readers of a bolt12 string:
+- if it encounters a `+` followed zero or more whitespace characters between 
+  two bech32 characters:
+  - MUST remove the `+` and whitespace.
 
 ## Rationale
 
@@ -105,6 +109,8 @@ yyyyyyyyyyyy+
 
 zzzzz
 ```
+
+See [format-string-test.json](bolt12/format-string-test.json).
 
 ## Signature Calculation
 
