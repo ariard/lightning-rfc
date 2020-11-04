@@ -330,44 +330,7 @@ To calculate the start of period #`N` for `N` > 0:
 Note that offset seconds can overflow only if the period start is in a
 leap second; we ignore this!
 
-If a period starts at 10:00:00 (am) UTC on 31 December, 1970 (31485600
-seconds since epoch), the following demonstrates period ends:
-* time_unit 0:
-  - period 1: 31 Dec 1970 10:00:01 UTC (31485601)
-  - period 10: 31 Dec 1970 10:00:10 UTC (31485610)
-  - period 100: 31 Dec 1970 10:01:40 UTC (31485700)
-  - period 1000: 31 Dec 1970 10:16:40 UTC (31486600)
-* time_unit 1:
-  - period 1: 1 Jan 1971 10:00:00 UTC (31572000)
-  - period 10: 10 Jan 1971 10:00:00 UTC (32349600)
-  - period 100: 10 Apr 1971 10:00:00 UTC (40125600)
-  - period 1000: 26 Sep 1973 10:00:00 UTC (117885600)
-* time_unit 2:
-  - period 1: 31 Jan 1971 10:00:00 UTC (34164000)
-  - period 10: 31 Oct 1971 10:00:00 UTC (57751200)
-  - period 100: 30 Apr 1975 10:00:00 UTC (168084000)
-* time_unit 3:
-  - period 1: 31 Dec 1971 10:00:00 UTC (63021600)
-  - period 10: 31 Dec 1980 10:00:00 UTC (347104800)
-
-If a period starts at 10:00:00 (am) UTC on 29 February, 2016 (1456740000):
-* time_unit 0:
-  - period 1: 29 Feb 2016 10:00:01 UTC (1456740001)
-  - period 10: 29 Feb 2016 10:00:10 UTC (1456740010)
-  - period 100: 29 Feb 2016 10:01:40 UTC (1456740100)
-  - period 1000: 29 Feb 2016 10:16:40 UTC (1456741000)
-* time_unit 1:
-  - period 1: 1 Mar 2016 10:00:00 UTC (1456826400)
-  - period 10: 10 Mar 2016 10:00:00 UTC (1457604000)
-  - period 100: 08 Jun 2016 10:00:00 UTC (1465380000)
-  - period 1000: 25 Nov 2018 10:00:00 UTC (1543140000)
-* time_unit 2:
-  - period 1: 29 Mar 2016 10:00:00 UTC (1459245600)
-  - period 10: 29 Sep 2016 10:00:00 UTC (1475143200)
-  - period 100: 29 Jun 2024 10:00:00 UTC (1719655200)
-* time_unit 3:
-  - period 1: 28 Feb 2017 10:00:00 UTC (1488276000)
-  - period 10: 28 Feb 2026 10:00:00 UTC (1772272800)
+See [offer-period-test.json](bolt12/offer-period-test.json).
 
 ## Requirements For Offers
 
@@ -861,6 +824,8 @@ A reader of an invoice:
          - otherwise:
            - SHOULD confirm authorization if `msat` is not reasonably close
              to the amount authorized.
+	   - if the offer contained `recurrence`:
+	     - MUST reject the invoice if `recurrence_basetime` is not set.
 
 ## Rationale
 
