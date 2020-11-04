@@ -399,7 +399,6 @@ is no legacy format, thus a `bigsize` of 0 means no payload.
         * [`...*byte`:`invoice`]
     1. type: 68 (`invoice_request_failed`)
     2. data:
-        * [`invoice_request_id`:`id`]
         * [`...*byte`:`error`]
 
 
@@ -458,6 +457,16 @@ The reader:
     - MUST send the reply via `onion_message` to the node indicated by
         the first element of `reply_path` `path` using `reply_path` `blinding`.
 
+
+## Rationale
+
+The critical requirement here is that if you supply a reply_path, you
+must ensure that it's actually used: otherwise it's possible to probe
+using onion messages to see which has the desired result.
+
+The simplest way to do this is to only accept replies which use the
+blinding derived for the final entry of the reply_path. (FIXME: I
+think?)
 
 # Accepting and Forwarding a Payment
 
