@@ -332,6 +332,41 @@ leap second; we ignore this!
 
 See [offer-period-test.json](bolt12/offer-period-test.json).
 
+## Authorization
+
+Authorization is generally required for payments: without some
+indication what someone intended to pay for and how much they intended
+to pay, proof of payment is pointless.
+
+Normally this is simple: get the user to authorize the exact amount
+and description before paying an invoice.  With recurrence this
+becomes more complex, as an implementation probably does not want to
+prompt the user on every payment, but receive some initial
+authorization to spend within a range (e.g. "Pay $5 AUD once a
+week?").  In particular, the authorization may be in the user's native
+currency, not the vendor's currency nor in Bitcoin.
+
+For example, consider an offer with weekly recurrence (`time_unit`=1,
+`period`=7), `amount` 500, `currency` `AUD` ($5 Australian dollars).
+An implementation may present this to the user as USD $3.53 (max
+$3.71), to allow up to 5% exchange slippage, and receive their
+authorization.  As it received each invoice, it would convert the
+`msat` into USD to check that it was below the maximum authorization
+of USD$3.71.  If it was, it would simply pay the invoice without user
+interaction.
+
+On the other hand, if an invoice did exceed the authorization, it
+would request reauthorization.  It could also indicate whether it was
+due to AUD/USD changes (since the offer indicated that was the
+currency it was using) or a disagreement on the bitcoin exchange rate.
+
+Note that the problem is simpler for non-recurring offers, where
+authorization may simply be delayed until the invoice is received and
+the exact amount is known.
+
+Also, the implementation of a trusted exchange rate service is left to
+the reader.
+
 ## Requirements For Offers
 
 A writer of an offer:
@@ -559,14 +594,13 @@ The reader of an invoice_request:
       - MUST fail the request if there is a `quantity` field.
     - if the offer included `amount`:
       - MUST fail the request if it contains `amount`.
-      - MUST calculate the invoice amount using the offer `amount`.
-      - if offer `currency` is not the invoice currency, convert to the
-        invoice currency.
-      - if request contains `quantity`, multiply by `quantity`.
+      - MUST calculate the *base invoice amount* using the offer `amount`:
+        - if offer `currency` is not the invoice currency, convert to the
+          invoice currency.
+        - if request contains `quantity`, multiply by `quantity`.
     - otherwise:
       - MUST fail the request if it does not contain `amount`.
-      - MUST use the request `amount` as the invoice amount.
-    (Note: invoice amount can be further modiifed by recurrence below)
+      - MUST use the request `amount` as the *base invoice amount*. (Note: invoice amount can be further modiifed by recurrence below)
     - if the offer had a `recurrence`:
       - MUST fail the request if there is no `recurrence_counter` field.
       - MUST fail the request if there is no `recurrence_signature` field.
@@ -592,7 +626,7 @@ The reader of an invoice_request:
           - SHOULD fail the request if the current time is equal to or after the
             start of the period plus `seconds_after`.
           - if `proportional_amount` is 1:
-            - MUST adjust the invoice amount proportional to time remaining in
+            - MUST adjust the *base invoice amount* proportional to time remaining in
               the period.
         - otherwise:
           - if `counter` is non-zero:
@@ -785,21 +819,15 @@ A writer of an invoice:
     - MUST set `vendor` exactly as the offer did.
     - MUST begin `description` with the `description` from the offer.
     - MAY append additional information to `description` (e.g. " +shipping").
-
-  - if the invoice_request specified an `amount`:
-    - MUST specify the same `msat`.
-  - otherwise:
-    - MUST specify `amount`.`msat` in multiples of the minimum lightning-payable unit
-      (e.g. milli-satoshis for bitcoin) for the first `chains` entry.
-    - SHOULD derive `msat` using the `amount` and `currency` from
-      the offer, and `quantity` from the invoice_request.
+  - MUST specify `amount`.`msat` in multiples of the minimum lightning-payable unit
+    (e.g. milli-satoshis for bitcoin) for the first `chains` entry.
+  - if it does not set `amount` to the *base invoice amount* calculated from the invoice_request:
+     - MUST append the reason to `description` (e.g. " 5% bulk discount").
 
 A reader of an invoice:
   - MUST reject the invoice if `signature` is not a valid signature using `node_id` as described in [Signature Calculation](#signature-calculation).
   - MUST reject the invoice if `msat` is not present.
   - if the invoice is a reply to an `invoice_request`:
-     - MUST reject the invoice if `msat` was specified by `invoice_request`
-       and the invoice `msat` does not exactly equal that.
      - MUST reject the invoice unless the following fields are equal or unset
        exactly as they are in the `invoice_request:`
        - `offer_id`
@@ -816,16 +844,10 @@ A reader of an invoice:
          match the `offer`
          - MAY highlight if `description` has simply had a change appended.
        - SHOULD confirm authorization if `vendor` does not exactly
-         match the `offer`
-       - if the offer contained an `amount`:
-         - if the offer did not specify `currency`:
-           - MUST reject the invoice if `msat` does not exactly match
-             amount in the offer multiplied by `quantity` (if any).
-         - otherwise:
-           - SHOULD confirm authorization if `msat` is not reasonably close
-             to the amount authorized.
-	   - if the offer contained `recurrence`:
-	     - MUST reject the invoice if `recurrence_basetime` is not set.
+         match the `offer`.
+       - if the offer contained `recurrence`:
+         - MUST reject the invoice if `recurrence_basetime` is not set.
+    - SHOULD confirm authorization if `msat` is not within the amount range authorized.
 
 ## Rationale
 
@@ -847,30 +869,9 @@ The reader of the invoice cannot trust the invoice correctly reflects the
 offer and invoice_request fields, hence the requirements to check that they
 are correct.
 
-If there's been no currency change, the amount should similarly be
-reflected exactly.  If there has been a conversion, it's useful to
-accept some difference of exchange rate without requiring additional
-authorization: this definitions of reasonable are left to the
-implementation.
-
-For example, consider an offer with weekly recurrence (`time_unit`=1,
-`period`=7), `amount` 500, `currency` `AUD` ($5 Australian dollars).
-An implementation may present this to the user as USD $3.53 (max
-$3.71), to allow up to 5% exchange slippage, and receive their
-authorization.  As it received each invoice, it would convert the `msat`
-into USD to check that it was below the maximum authorization of
-USD$3.71.  If it was, it would not require reapproval to pay the
-invoice.
-
-On the other hand, if it did exceed the authorization, it would
-request reauthorization.  It could also indicate whether it was due to
-AUD/USD changes (since the offer indicated that was the currency it
-was using) or a disagreement on the bitcoin exchange rate.
-
-Note that the problem is simpler for non-recurring offers, where
-authorization may simply be delayed until the invoice is received and
-the exact amount is known.  Also, the implementation of a trusted
-exchange rate service is left to the reader.
+Note that the recipient of the invoice can determine the expected
+amount from either the offer it received, or the invoice_request it
+sent, so often already has authorization for the expected amount.
 
 FIXME: Possible future extensions:
 
@@ -881,8 +882,6 @@ FIXME: Possible future extensions:
    other means (i.e. transport-specific), but is still hashed for sig.
 4. We could upgrade to allow multiple offers in one invoice_request and
    invoice, to make a shopping list.
-5. Allow amount override on invreq, even if specified.
-6. Allow amount change in invoice, even if specified.
 7. All-zero offer_id == gratuitous payment.
 8. Recurrent invoice requests?
 
