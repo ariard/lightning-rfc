@@ -435,7 +435,6 @@ The writer:
         `ChaChaPoly-1305` encryption using an all-zero nonce).
       - MUST set `enctlv` to a valid `encmsg_tlvs` containing exactly one of either
         `next_node_id` or `next_short_channel_id`.
-    - MUST reject any replies which do not use `reply_path`.
   - otherwise:
     - MUST NOT set `reply_path`.
 
