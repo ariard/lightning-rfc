@@ -82,7 +82,7 @@ in case of dispute.
 Each of the forms documented here are in
 [TLV](01-messaging.md#type-length-value-format) format.
 
-The supported ASCII encoding is the designated prefix, followed by a
+The supported ASCII encoding is the human-readable prefix, followed by a
 `1`, followed by a bech32-style data string of the TLVs in order,
 optionally interspersed with `+` (for indicating additional data is to
 come).
@@ -120,10 +120,13 @@ there.  Thus to sign a message `msg` with `tag`, `m` is
 SHA256(SHA256(`tag`) || SHA256(`tag`) || `msg`).  The notation used
 here is `SIG(tag,msg,key)`.
 
-Each form is signed using one or more TLV signature elements; TLV types
-240 through 1000 are considered signature elements.  For these the
-tag is `LnPrefix` | prefix, and `msg` is the merkle-root; 
-the prefix is the designated prefix listed below, e.g. `lno`.
+Each form is signed using one or more TLV signature elements; TLV
+types 240 through 1000 are considered signature elements.  For these
+the tag is `lightning` | `messagename` | `fieldname`, and `msg` is the
+merkle-root; `lightning` is the literal 9-byte ASCII string,
+`messagename` is the name of the TLV stream being signed (i.e. `offer`
+or `invoice`) and the `fieldname` is the TLV field containing the
+signature (e.g. `signature` or `recurrence_signature`).
 
 The formulation of the merkle tree is similar to that proposed in
 [BIP-taproot], with the insertion of alternate "dummy" leaves to avoid
@@ -133,14 +136,14 @@ The Merkle Tree's leaves are, in TLV-ascending order:
 1. The SHA256 of: `LnLeaf` followed by the TLV entry.
 2. The SHA256 of: `LnAll` followed all non-signature TLV entries appended in ascending order.
 
-The Merkle tree inner nodes are SHA256('LnBranch' | lesser-SHA256 |
+The Merkle tree inner nodes are SHA256(`LnBranch` | lesser-SHA256 |
 greater-SHA256); this ordering means that proofs are more compact
 since left/right is inherently determined.
 
 If there are not exactly a power of 2 leaves, then the tree depth will
 be uneven, with the deepest tree on the lowest-order leaves.
 
-e.g. consider the encoding of an `lno` form with TLVs TLV1, TLV2 and TLV3:
+e.g. consider the encoding of an `offer` `signature` with TLVs TLV1, TLV2 and TLV3:
 
 ```
 LALL=SHA256(`LnAll`|TLV1|TLV2|TLV3) 
@@ -169,7 +172,7 @@ Assume L1A2A > L3:
                            v          v
                 Root=SHA256('LnBranch'|L3|L1A2A)
 
-Signature = SIG('LnPrefixlno', Root, nodekey)
+Signature = SIG('lightningoffersignature', Root, nodekey)
 ```
 
 ## Rationale
@@ -184,7 +187,7 @@ particular invoice, so has some different characteristics; in particular it
 can be recurring, and the amount can be in a non-lightning currency.  It's
 also designed for compactness, to easily fit inside a QR code.
 
-The designated prefix for offers is `lno`.
+The human-readable prefix for offers is `lno`.
 
 ## TLV Fields for Offers
 
@@ -472,7 +475,7 @@ A reader of an offer:
 
 # Invoice Requests
 
-Invoice Requests are a request for an invoice; the designated prefix for
+Invoice Requests are a request for an invoice; the human-readable prefix for
 invoices is `lnr`.
 
 These can be spontaneous, such as a refund or exchange withdrawal, or in
@@ -557,8 +560,7 @@ The writer of an invoice_request:
       - MUST NOT include `recurrence_start`
     - MAY set `payer_info` to arbitrary data to be reflected into the invoice.
     - MUST set `recurrence_signature` `sig` as detailed in
-      [Signature Calculation](#signature-calculation) using the `payer_key` 
-      and prefix 'recurrence_signature'.
+      [Signature Calculation](#signature-calculation) using the `payer_key`.
     - SHOULD NOT send an `invoice_request` for a period which has
       already passed.
     - if the offer contains `recurrence_paywindow`:
@@ -662,7 +664,7 @@ tweaking the base key with SHA256(payer_base_pubkey || tweak).
 Invoices are a request for payment, and when the payment is made they
 it can be combined with the invoice to form a cryptographic receipt.
 
-The designated prefix for invoices is `lni`.  It can be sent in response
+The human-readable prefix for invoices is `lni`.  It can be sent in response
 to an `invoice_request` using `onion_message` `invoice` field.
 
 1. tlvs: `invoice`
