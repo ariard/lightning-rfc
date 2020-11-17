@@ -397,9 +397,9 @@ is no legacy format, thus a `bigsize` of 0 means no payload.
     1. type: 66 (`invoice`)
     2. data:
         * [`...*byte`:`invoice`]
-    1. type: 68 (`invoice_request_failed`)
+    1. type: 68 (`invoice_error`)
     2. data:
-        * [`...*byte`:`error`]
+        * [`...*byte`:`invoice_error`]
 
 
 1. tlvs: `encmsg_tlvs`

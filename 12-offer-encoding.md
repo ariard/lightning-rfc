@@ -9,6 +9,7 @@
   * [Invoices](#invoices)
   * [Offers](#offers)
   * [Invoice Requests](#invoice-requests)
+  * [Invoice Errors](#invoice-errors)
 
 # Limitations of BOLT 11
 
@@ -873,7 +874,52 @@ Note that the recipient of the invoice can determine the expected
 amount from either the offer it received, or the invoice_request it
 sent, so often already has authorization for the expected amount.
 
-FIXME: Possible future extensions:
+# Invoice Errors
+
+Informative errors can be returned in an onion message `invoice_error`
+field (via the onion `reply_path`) for either `invoice_request` or
+`invoice`.
+
+## TLV Fields for `invoice_error`
+
+1. tlvs: `invoice_error`
+2. types:
+    1. type: 1 (`erroneous_field`)
+    2. data:
+        * [`tu64`:`tlv_fieldnum`]
+    1. type: 3 (`suggested_value`)
+    2. data:
+        * [`...*byte`:`value`]
+    1. type: 5 (`error`)
+    2. data:
+        * [`...*byte`:`msg`]
+
+## Requirements
+
+A writer of an invoice_error:
+  - MUST set `error` to a valid UTF-8 string.
+  - MAY set `erroneous_field` to a specific field number in the
+    `invoice` or `invoice_request` which had a problem.
+  - if it sets `erroneous_field`:
+    - MAY set `suggested_value`.
+	- if it sets `suggested_value`:
+	  - MUST set `suggested_value` to a valid field for that `tlv_fieldnum`.
+  - otherwise:
+    - MUST NOT set `suggested_value`.
+
+A reader of an invoice_error:
+   FIXME!
+
+## Rationale
+
+Usually an error message is sufficient for diagnostics, however there
+is at least one case where it should be programatically parsable.  A
+recurring offer which sets `send_invoice` can also specify a currency,
+which opens the possibility for a disagreement on exchange rate.  In
+this case, the `suggested_value` reflects its expected value, and the
+sender can send a new invoice.
+
+# FIXME: Possible future extensions:
 
 1. The offer can require delivery info in the invreq.
 2. An offer can be updated: the response to an invreq is another offer,
