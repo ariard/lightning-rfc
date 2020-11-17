@@ -45,17 +45,17 @@ selling or has sold something.
 There are two basic payment flows supported by BOLT 12:
 
 The general user-pays-merchant flow is:
-1. A merchant publishes an *offer*, such as on a web page or a QR code.
+1. A merchant publishes an *offer* ("send me money"), such as on a web page or a QR code.
 2. Every user requests a unique *invoice* over the lightning network
    using an *invoice_request* message.
 3. The merchant replies with the *invoice*.
 4. The user makes a payment to the merchant indicated by the invoice.
 
 The merchant-pays-user flow (e.g. ATM or refund):
-1. The merchant provides a user-specific *invoice_request* in a webpage or QR code,
+1. The merchant provides a user-specific *offer* ("take my money") in a webpage or QR code,
    with an amount (for a refund, also a reference to the to-be-refunded
    invoice).
-2. A user sends an *invoice* for the amount in the *invoice_request* (for a
+2. A user sends an *invoice* for the amount in the *offer* (for a
    refund, a proof that they requested the original)
 3. The merchant makes a payment to the user indicated by the invoice.
 
@@ -181,8 +181,8 @@ FIXME: some taproot, some about obscuring leaves in merkle proofs.
 
 # Offers
 
-Offers are a precursor to an invoice: readers will usually request an invoice
-(or multiple) based on the offer.  An offer can be much longer-lived than a
+Offers are a precursor to an invoice: readers will either request an invoice
+(or multiple) or send an invoice based on the offer.  An offer can be much longer-lived than a
 particular invoice, so has some different characteristics; in particular it
 can be recurring, and the amount can be in a non-lightning currency.  It's
 also designed for compactness, to easily fit inside a QR code.
@@ -242,6 +242,10 @@ The human-readable prefix for offers is `lno`.
     1. type: 30 (`node_id`)
     2. data:
         * [`pubkey32`:`node_id`]
+    1. type: 54 (`send_invoice`)
+    1. type: 34 (`refund_for`)
+    2. data:
+        * [`sha256`:`refunded_payment_hash`]
     1. type: 240 (`signature`)
     2. data:
         * [`bip340sig`:`sig`]
@@ -455,6 +459,13 @@ A writer of an offer:
     - MUST NOT include `recurrence_base`.
     - MUST NOT include `recurrence_paywindow`.
     - MUST NOT include `recurrence_limit`.
+  - if `send_invoice` is present:
+    - if the offer is for a partial or full refund for a previously-paid
+      invoice:
+      - SHOULD set `refunded_payment_hash` to the `payment_hash` of that
+        invoice.
+  - otherwise:
+    - MUST NOT set `refunded_payment_hash`.
 
 A reader of an offer:
   - if `features` contains unknown _odd_ bits that are non-zero:
@@ -462,7 +473,7 @@ A reader of an offer:
   - if `features` contains unknown _even_ bits that are non-zero:
     - MUST NOT respond to the offer.
     - SHOULD indicate the unknown bit to the user.
-  - if `node_id` is not set:
+  - if `node_id` or `description` is not set:
     - MUST NOT respond to the offer.
   - SHOULD gain user consent for recurring payments.
   - SHOULD allow user to view and cancel recurring payments.
@@ -478,9 +489,6 @@ A reader of an offer:
 Invoice Requests are a request for an invoice; the human-readable prefix for
 invoices is `lnr`.
 
-These can be spontaneous, such as a refund or exchange withdrawal, or in
-response to an offer (usually via an `onion_message` `invoice_request` field).
-
 ## TLV Fields for `invoice_request`
 
 1. tlvs: `invoice_request`
@@ -494,18 +502,12 @@ response to an offer (usually via an `onion_message` `invoice_request` field).
     1. type: 8 (`amount`)
     2. data:
         * [`tu64`:`msat`]
-    1. type: 10 (`description`)
-    2. data:
-        * [`...*byte`:`description`]
     1. type: 12 (`features`)
     2. data:
         * [`...*byte`:`features`]
     1. type: 32 (`quantity`)
     2. data:
         * [`tu64`:`quantity`]
-    1. type: 34 (`refund_for`)
-    2. data:
-        * [`sha256`:`refunded_payment_hash`]
     1. type: 36 (`recurrence_counter`)
     2. data:
         * [`tu32`:`counter`]
@@ -527,25 +529,19 @@ response to an offer (usually via an `onion_message` `invoice_request` field).
 The writer of an invoice_request:
   - MUST set `payer_key` to a transient public key.
   - MUST remember the secret key corresponding to `payer_key`.
-  - if the invoice_request is a response to an offer:
-    - MUST set `offer_id` to the merkle root of the offer as described in [Signature Calculation](#signature-calculation).
-    - MUST NOT set or imply any `chain_hash` not set or implied by the offer.
-    - MUST NOT set `description`.
-    - if the offer had a `quantity_min` or `quantity_max` field:
-      - MUST set `quantity`
-      - MUST set it within that (inclusive) range.
-    - otherwise:
-      - MUST NOT set `quantity`
-  - otherwise (not responding to an offer):
-    - MUST set `description` to a complete description of the purpose
-      of the payment.
-
-  - if there was no corresponding offer, or the offer did not specify `amount`:
+  - MUST set `offer_id` to the merkle root of the offer as described in [Signature Calculation](#signature-calculation).
+  - MUST NOT set or imply any `chain_hash` not set or implied by the offer.
+  - if the offer had a `quantity_min` or `quantity_max` field:
+    - MUST set `quantity`
+    - MUST set it within that (inclusive) range.
+  - otherwise:
+    - MUST NOT set `quantity`
+  - if the offer did not specify `amount`:
     - MUST specify `amount`.`msat` in multiples of the minimum lightning-payable unit
       (e.g. milli-satoshis for bitcoin) for the first `chains` entry.
   - otherwise:
     - MUST NOT set `amount`
-  - if there was a corresponding offer, and the offer contained `recurrence`:
+  - if the offer contained `recurrence`:
     - for the initial request:
       - MUST use a unique `payer_key`.
       - MUST set `recurrence_counter` `counter` to 0.
@@ -574,70 +570,61 @@ The writer of an invoice_request:
     - MUST NOT set `recurrence_counter`.
     - MUST NOT set `recurrence_signature`.
     - MUST NOT set `recurrence_start`
-  - if the invoice_request is for a partial or full refund for a previously-paid
-    invoice:
-    - SHOULD set `refunded_payment_hash` to the `payment_hash` of that
-      invoice.
-  - otherwise:
-    - MUST NOT set `refunded_payment_hash`.
 
 The reader of an invoice_request:
   - MUST fail the request if `payer_key` is not present.
   - MUST fail the request if `chains` does not include (or imply) a supported chain.
   - MUST fail the request if `features` contains unknown even bits.
-  - if `offer_id` is not present:
-    - MUST fail the request if `description` is not present.
-    - FIXME: refunds and more!
+  - MUST fail the request if `offer_id` is not present.
+  - MUST fail the request if the `offer_id` does not refer to an unexpired offer.
+  - if the offer had a `quantity_min` or `quantity_max` field:
+    - MUST fail the request if there is no `quantity` field.
+    - MUST fail the request if there is `quantity` is not within that (inclusive) range.
   - otherwise:
-    - MUST fail the request if the `offer_id` does not refer to an unexpired offer.
-    - if the offer had a `quantity_min` or `quantity_max` field:
-      - MUST fail the request if there is no `quantity` field.
-      - MUST fail the request if there is `quantity` is not within that (inclusive) range.
+    - MUST fail the request if there is a `quantity` field.
+  - if the offer included `amount`:
+    - MUST fail the request if it contains `amount`.
+    - MUST calculate the *base invoice amount* using the offer `amount`:
+      - if offer `currency` is not the invoice currency, convert to the
+        invoice currency.
+      - if request contains `quantity`, multiply by `quantity`.
+  - otherwise:
+    - MUST fail the request if it does not contain `amount`.
+    - MUST use the request `amount` as the *base invoice amount*. (Note: invoice amount can be further modiifed by recurrence below)
+  - if the offer had a `recurrence`:
+    - MUST fail the request if there is no `recurrence_counter` field.
+    - MUST fail the request if there is no `recurrence_signature` field.
+    - MUST fail the request if `recurrence_signature` is not correct.
+    - if the offer had `recurrence_base` and `start_any_period` was 1:
+      - MUST fail the request if there is no `recurrence_start` field.
+      - MUST consider the period index for this request to be the
+        `recurrence_start` field plus the `recurrence_counter` `counter`
+        field.
     - otherwise:
-      - MUST fail the request if there is a `quantity` field.
-    - if the offer included `amount`:
-      - MUST fail the request if it contains `amount`.
-      - MUST calculate the *base invoice amount* using the offer `amount`:
-        - if offer `currency` is not the invoice currency, convert to the
-          invoice currency.
-        - if request contains `quantity`, multiply by `quantity`.
-    - otherwise:
-      - MUST fail the request if it does not contain `amount`.
-      - MUST use the request `amount` as the *base invoice amount*. (Note: invoice amount can be further modiifed by recurrence below)
-    - if the offer had a `recurrence`:
-      - MUST fail the request if there is no `recurrence_counter` field.
-      - MUST fail the request if there is no `recurrence_signature` field.
-      - MUST fail the request if `recurrence_signature` is not correct.
-      - if the offer had `recurrence_base` and `start_any_period` was 1:
-        - MUST fail the request if there is no `recurrence_start` field.
-        - MUST consider the period index for this request to be the
-          `recurrence_start` field plus the `recurrence_counter` `counter`
-          field.
+      - MUST fail the request if there is a `recurrence_start` field.
+      - MUST consider the period index for this request to be the
+        `recurrence_counter` `counter` field.
+    - if the offer has a `recurrence_limit`:
+      - MUST fail the request if the period index is greater than `max_period`.
+    - MUST calculate the period using the period index as detailed in [Period Calculation](#offer-period-calculation).
+    - if `recurrence_counter` is non-zero:
+      - MUST fail the request if the no invoice for the previous period
+        has been paid.
+      - if the offer had a `recurrence_paywindow`:
+        - SHOULD fail the request if the current time is before the start of
+          the period minus `seconds_before`.
+        - SHOULD fail the request if the current time is equal to or after the
+          start of the period plus `seconds_after`.
+        - if `proportional_amount` is 1:
+          - MUST adjust the *base invoice amount* proportional to time remaining in
+            the period.
       - otherwise:
-        - MUST fail the request if there is a `recurrence_start` field.
-        - MUST consider the period index for this request to be the
-          `recurrence_counter` `counter` field.
-      - if the offer has a `recurrence_limit`:
-        - MUST fail the request if the period index is greater than `max_period`.
-      - MUST calculate the period using the period index as detailed in [Period Calculation](#offer-period-calculation).
-      - if `recurrence_counter` is non-zero:
-        - MUST fail the request if the no invoice for the previous period
-          has been paid.
-        - if the offer had a `recurrence_paywindow`:
-          - SHOULD fail the request if the current time is before the start of
-            the period minus `seconds_before`.
-          - SHOULD fail the request if the current time is equal to or after the
-            start of the period plus `seconds_after`.
-          - if `proportional_amount` is 1:
-            - MUST adjust the *base invoice amount* proportional to time remaining in
-              the period.
-        - otherwise:
-          - if `counter` is non-zero:
-            - SHOULD fail the request if the current time is prior to the start
-              of the previous period.
-    - otherwise (the offer had no `recurrence`):
-      - MUST fail the request if there is a `recurrence_counter` field.
-      - MUST fail the request if there is a `recurrence_signature` field.
+        - if `counter` is non-zero:
+          - SHOULD fail the request if the current time is prior to the start
+            of the previous period.
+  - otherwise (the offer had no `recurrence`):
+    - MUST fail the request if there is a `recurrence_counter` field.
+    - MUST fail the request if there is a `recurrence_signature` field.
 
 ## Rationale
 
@@ -664,8 +651,9 @@ tweaking the base key with SHA256(payer_base_pubkey || tweak).
 Invoices are a request for payment, and when the payment is made they
 it can be combined with the invoice to form a cryptographic receipt.
 
-The human-readable prefix for invoices is `lni`.  It can be sent in response
-to an `invoice_request` using `onion_message` `invoice` field.
+The human-readable prefix for invoices is `lni`.  It can be sent in
+response to an `invoice_request` or an `offer` with `send_invoice`
+using `onion_message` `invoice` field.
 
 1. tlvs: `invoice`
 2. types:
@@ -705,6 +693,7 @@ to an `invoice_request` using `onion_message` `invoice` field.
     1. type: 36 (`recurrence_counter`)
     2. data:
        * [`tu32`:`counter`]
+    1. type: 54 (`send_invoice`)
     1. type: 68 (`recurrence_start`)
     2. data:
         * [`tu32`:`period_offset`]
@@ -757,15 +746,12 @@ to an `invoice_request` using `onion_message` `invoice` field.
 ## Requirements
 
 A writer of an invoice:
-  - if the `invoice_request` contained the same `offer_id`, `payer_key` and `recurrence_counter` (if any) as a previous `invoice_request`:
-    - MAY simply reuse the previous invoice.
-  - otherwise:
-    - MUST NOT reuse a previous invoice.
   - MUST set `timestamp` to the number of seconds since Midnight 1
     January 1970, UTC.
   - MUST set `payment_hash` to the SHA2 256-bit hash of the
     `payment_preimage` that will be given in return for payment.
-  - MUST set `node_id` to the public key of the node to pay the invoice to.
+  - MUST set (or not set) `send_invoice` the same as the offer.
+  - MUST set `offer_id` to the id of the offer.
   - MUST specify exactly one signature TLV: `signature`.
     - MUST set `sig` to the signature using `node_id` as described in [Signature Calculation](#signature-calculation).
   - if the chain for the invoice is not solely bitcoin:
@@ -808,49 +794,77 @@ A writer of an invoice:
     - SHOULD ignore any payment which does not use one of the paths.
   - otherwise:
     - MUST NOT include `blinded_payinfo`.
-  - MUST set (or not set) `offer_id` exactly as the invoice_request did.
-  - MUST set (or not set) `quantity` exactly as the invoice_request did.
-  - MUST set (or not set) `refund_for` exactly as the invoice_request did.
-  - MUST set (or not set) `recurrence_counter` exactly as the invoice_request did.
-  - MUST set (or not set) `recurrence_start` exactly as the invoice_request did.
-  - MUST set `payer_key` exactly as the invoice_request did.
-  - MUST set (or not set) `payer_info` exactly as the invoice_request did.
-  - if it sets `refund_for`:
-    - MUST set `refund_signature` to the signature of the
-      `refunded_payment_hash` using the `payer_key`.
-  - if it sets `offer_id`:
-    - MUST set `vendor` exactly as the offer did.
-    - MUST begin `description` with the `description` from the offer.
-    - MAY append additional information to `description` (e.g. " +shipping").
+  - MUST set `vendor` exactly as the offer did.
   - MUST specify `amount`.`msat` in multiples of the minimum lightning-payable unit
     (e.g. milli-satoshis for bitcoin) for the first `chains` entry.
-  - if it does not set `amount` to the *base invoice amount* calculated from the invoice_request:
-     - MUST append the reason to `description` (e.g. " 5% bulk discount").
+  - if responding to an `invoice_request`:
+    - if for the same `offer_id`, `payer_key` and `recurrence_counter` (if any) as a previous `invoice_request`:
+      - MAY simply reuse the previous invoice.
+    - otherwise:
+      - MUST NOT reuse a previous invoice.
+    - MUST set `node_id` the same as the offer.
+    - MUST set (or not set) `quantity` exactly as the invoice_request did.
+    - MUST set (or not set) `recurrence_counter` exactly as the invoice_request did.
+    - MUST set (or not set) `recurrence_start` exactly as the invoice_request did.
+    - MUST set `payer_key` exactly as the invoice_request did.
+    - MUST set (or not set) `payer_info` exactly as the invoice_request did.
+    - MUST begin `description` with the `description` from the offer.
+    - MAY append additional information to `description` (e.g. " +shipping").
+    - if it does not set `amount` to the *base invoice amount* calculated from the invoice_request:
+       - MUST append the reason to `description` (e.g. " 5% bulk discount").
+    - MUST NOT set `refund_for`
+    - MUST NOT set `refund_signature`
+  - otherwise (responding to a `send_invoice` offer):
+    - MUST set `node_id` to the id of the node to send payment to.
+    - MUST set `description` the same as the offer.
+    - if the offer had a `quantity_min` or `quantity_max` field:
+      - MUST set `quantity`
+      - MUST set it within that (inclusive) range.
+    - otherwise:
+      - MUST NOT set `quantity`
+    - MUST set `payer_key` to the `node_id` of the offer.
+    - MUST NOT set `payer_info`.
+    - MUST set (or not set) `refund_for` exactly as the offer did.
+    - if it sets `refund_for`:
+      - MUST set `refund_signature` to the signature of the
+        `refunded_payment_hash` using prefix `refund_signature` and the `payer_key` from the to-be-refunded invoice.
+    - otherwise:
+      - MUST NOT set `refund_signature`
+    - FIXME: recurrence!
 
 A reader of an invoice:
   - MUST reject the invoice if `signature` is not a valid signature using `node_id` as described in [Signature Calculation](#signature-calculation).
   - MUST reject the invoice if `msat` is not present.
+  - SHOULD confirm authorization if `msat` is not within the amount range authorized.
   - if the invoice is a reply to an `invoice_request`:
+     - MUST reject the invoice unless `offer_id` is equal to the id of the offer.
+     - MUST reject the invoice unless `node_id` is equal to the offer.
      - MUST reject the invoice unless the following fields are equal or unset
        exactly as they are in the `invoice_request:`
-       - `offer_id`
        - `quantity`
        - `recurrence_counter`
        - `recurrence_start`
        - `payer_key`
        - `payer_info`
-       - `refund_for`
-     - if the `invoice_request` contained an `offer_id`:
-       - MUST reject the invoice unless `node_id` is equal to the `node_id`
-         in the offer.
-       - SHOULD confirm authorization if the `description` does not exactly
-         match the `offer`
-         - MAY highlight if `description` has simply had a change appended.
-       - SHOULD confirm authorization if `vendor` does not exactly
-         match the `offer`.
-       - if the offer contained `recurrence`:
-         - MUST reject the invoice if `recurrence_basetime` is not set.
-    - SHOULD confirm authorization if `msat` is not within the amount range authorized.
+    - SHOULD confirm authorization if the `description` does not exactly
+      match the `offer`
+      - MAY highlight if `description` has simply had a change appended.
+    - SHOULD confirm authorization if `vendor` does not exactly
+      match the `offer`.
+  - otherwise if `offer_id` is set:
+    - MUST fail the request if the `offer_id` does not refer an unexpired offer with `send_invoice`
+    - MUST reject the invoice unless the following fields are equal or unset
+      exactly as they are in the `offer`:
+      - `refund_for`
+      - `description`
+      - `vendor`
+    - if the offer had a `quantity_min` or `quantity_max` field:
+      - MUST fail the request if there is no `quantity` field.
+      - MUST fail the request if there is `quantity` is not within that (inclusive) range.
+    - otherwise:
+      - MUST fail the request if there is a `quantity` field.
+  - if the offer contained `recurrence`:
+    - MUST reject the invoice if `recurrence_basetime` is not set.
 
 ## Rationale
 
@@ -904,8 +918,8 @@ A writer of an invoice_error:
     `invoice` or `invoice_request` which had a problem.
   - if it sets `erroneous_field`:
     - MAY set `suggested_value`.
-	- if it sets `suggested_value`:
-	  - MUST set `suggested_value` to a valid field for that `tlv_fieldnum`.
+    - if it sets `suggested_value`:
+      - MUST set `suggested_value` to a valid field for that `tlv_fieldnum`.
   - otherwise:
     - MUST NOT set `suggested_value`.
 
