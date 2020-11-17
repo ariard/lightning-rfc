@@ -114,7 +114,7 @@ See [format-string-test.json](bolt12/format-string-test.json).
 
 ## Signature Calculation
 
-All signatures are created as per [BIP-340], and tagged as recommended
+All signatures are created as per [BIP-340](https://github.com/bitcoin/bips/blob/master/bip-0340.mediawiki), and tagged as recommended
 there.  Thus to sign a message `msg` with `tag`, `m` is
 SHA256(SHA256(`tag`) || SHA256(`tag`) || `msg`).  The notation used
 here is `SIG(tag,msg,key)`.
@@ -240,7 +240,7 @@ The designated prefix for offers is `lno`.
         * [`pubkey32`:`node_id`]
     1. type: 240 (`signature`)
     2. data:
-        * [`signature`:`sig`]
+        * [`bip340sig`:`sig`]
 
 1. subtype: `blinded_path`
 2. data:
@@ -516,7 +516,7 @@ response to an offer (usually via an `onion_message` `invoice_request` field).
         * [`...*byte`:`blob`]
     1. type: 242 (`recurrence_signature`)
     2. data:
-        * [`signature`:`sig`]
+        * [`bip340sig`:`sig`]
 
 ## Requirements for Invoice Requests
 
@@ -732,10 +732,10 @@ to an `invoice_request` using `onion_message` `invoice` field.
         * [`num*fallback_address`:`fallbacks`]
     1. type: 52 (`refund_signature`)
     2. data:
-        * [`signature`:`payer_signature`]
+        * [`bip340sig`:`payer_signature`]
     1. type: 240 (`signature`)
     2. data:
-        * [`signature`:`sig`]
+        * [`bip340sig`:`sig`]
 
 1. subtype: `blinded_payinfo`
 2. data:
