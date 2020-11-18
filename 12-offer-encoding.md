@@ -557,6 +557,8 @@ The writer of an invoice_request:
     - MAY set `payer_info` to arbitrary data to be reflected into the invoice.
     - MUST set `recurrence_signature` `sig` as detailed in
       [Signature Calculation](#signature-calculation) using the `payer_key`.
+    - if the offer contained `recurrence_limit`:
+      - MUST NOT send an `invoice_request` for a period greater than `max_period`
     - SHOULD NOT send an `invoice_request` for a period which has
       already passed.
     - if the offer contains `recurrence_paywindow`:
