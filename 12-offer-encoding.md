@@ -383,6 +383,7 @@ A writer of an offer:
     - MUST set `sig` to the signature using `node_id` as described in [Signature Calculation](#signature-calculation).
   - MUST set `description` to a complete description of the purpose
     of the payment.
+  - MUST set `description` to a valid UTF-8 string.
   - if the chain for the invoice is not solely bitcoin:
     - MUST specify `chains` the offer is valid for.
   - otherwise:
@@ -445,9 +446,10 @@ A writer of an offer:
         - MUST include `recurrence_paywindow`
       - if it includes `recurrence_paywindow`:
         - MUST set `seconds_before` to the maximum number of seconds prior to
-          a period for which it will accept payment for that period.
+          a period for which it will accept payment or invoice_request for that period.
         - MUST set `seconds_after` to the maximum number of seconds into to a
-          period for which it will accept payment for that period.
+          period for which it will accept payment or invoice_request for that period.
+        - MAY NOT enforce this for the initial period for offers without `recurrence_base`
         - SHOULD NOT set `seconds_after` to greater than the maximum number of
           seconds in a period.
         - if it `amount` is specified and the node will proportionally reduce
@@ -473,7 +475,11 @@ A reader of an offer:
   - if `features` contains unknown _even_ bits that are non-zero:
     - MUST NOT respond to the offer.
     - SHOULD indicate the unknown bit to the user.
-  - if `node_id` or `description` is not set:
+  - if `node_id`, `description` or `signature` is not set:
+    - MUST NOT respond to the offer.
+  - if `description` is not present:
+    - MUST NOT respond to the offer.
+  - if `signature` is not a valid signature using `node_id` as described in [Signature Calculation](#signature-calculation):
     - MUST NOT respond to the offer.
   - SHOULD gain user consent for recurring payments.
   - SHOULD allow user to view and cancel recurring payments.
@@ -483,6 +489,12 @@ A reader of an offer:
   - SHOULD not respond to an offer if the current time is after
     `absolute_expiry`.
   - FIXME: more!
+
+## Rationale
+
+It's quite reasonable to set a `recurrence_paywindow` with seconds_after
+equal to 0, but obviously this should not apply to the initial period if
+there is no recurrence_base.
 
 # Invoice Requests
 
@@ -562,8 +574,9 @@ The writer of an invoice_request:
     - SHOULD NOT send an `invoice_request` for a period which has
       already passed.
     - if the offer contains `recurrence_paywindow`:
-      - SHOULD NOT send an `invoice_request` for a period prior to `seconds_before` seconds before that period start.
-      - SHOULD NOT send an `invoice_request` for a period later than `seconds_after` seconds past that period start.
+      - if the offer has a `recurrence_basetime` or the `recurrence_counter` is non-zero:
+        - SHOULD NOT send an `invoice_request` for a period prior to `seconds_before` seconds before that period start.
+        - SHOULD NOT send an `invoice_request` for a period later than `seconds_after` seconds past that period start.
     - otherwise:
       - SHOULD NOT send an `invoice_request` with `recurrence_counter`
         is non-zero for a period whose immediate predecessor has not
@@ -741,7 +754,7 @@ using `onion_message` `invoice` field.
 
 1. subtype: `fallback_address`
 2. data:
-   * [`byte`:`type`]
+   * [`byte`:`version`]
    * [`u16`:`len`]
    * [`len*byte`:`address`]
 
@@ -779,11 +792,9 @@ A writer of an invoice:
     - MAY specify `fallbacks`
     - MUST specify `fallbacks` in order of most-preferred to least-preferred
       if it has a preference.
-    - for currency `bc`, it MUST set each `fallback_address` to one of:
-      - `type` to a valid witness version and `address` to a valid
-        witness program
-      - `type` to `17` and `address` to a public key hash
-      - `type` to `18` and `address` to a script hash.
+    - for the bitcoin chain, it MUST set each `fallback_address` with
+      `version` as a valid witness version and `address` as a valid witness
+      program
   - if it is connected only by private channels:
     - MUST include a `blinded_path` containing one or more paths to the node.
   - otherwise:
@@ -837,6 +848,12 @@ A writer of an invoice:
 A reader of an invoice:
   - MUST reject the invoice if `signature` is not a valid signature using `node_id` as described in [Signature Calculation](#signature-calculation).
   - MUST reject the invoice if `msat` is not present.
+  - MUST reject the invoice if `description` is not present.
+  - MUST reject the invoice if `timestamp` is not present.
+  - MUST reject the invoice if `payment_hash` is not present.
+  - if `blinded_path` is present:
+    - MUST reject the invoice if `blinded_payinfo` is not present.
+    - MUST reject the invoice if `blinded_payinfo` does not contain exactly as many `payinfo` as total `onionmsg_path` in `blinded_path`.
   - SHOULD confirm authorization if `msat` is not within the amount range authorized.
   - if the invoice is a reply to an `invoice_request`:
      - MUST reject the invoice unless `offer_id` is equal to the id of the offer.
@@ -854,19 +871,27 @@ A reader of an invoice:
     - SHOULD confirm authorization if `vendor` does not exactly
       match the `offer`.
   - otherwise if `offer_id` is set:
-    - MUST fail the request if the `offer_id` does not refer an unexpired offer with `send_invoice`
+    - MUST reject the invoice if the `offer_id` does not refer an unexpired offer with `send_invoice`
     - MUST reject the invoice unless the following fields are equal or unset
       exactly as they are in the `offer`:
       - `refund_for`
       - `description`
       - `vendor`
     - if the offer had a `quantity_min` or `quantity_max` field:
-      - MUST fail the request if there is no `quantity` field.
-      - MUST fail the request if there is `quantity` is not within that (inclusive) range.
+      - MUST reject the invoice if there is no `quantity` field.
+      - MUST reject the invoice if there is `quantity` is not within that (inclusive) range.
     - otherwise:
-      - MUST fail the request if there is a `quantity` field.
+      - MUST reject the invoice if there is a `quantity` field.
   - if the offer contained `recurrence`:
     - MUST reject the invoice if `recurrence_basetime` is not set.
+  - if the offer contained `refund_for`:
+      - MUST reject the invoice if `payer_key` does not match the invoice whose `payment_hash` is equal to `refund_for` `refunded_payment_hash`
+      - MUST reject the invoice if `refund_signature` is not set.
+      - MUST reject the invoice if `refund_signature` is not a valid signature using `payer_key` as described in [Signature Calculation](#signature-calculation).
+  - for the bitcoin chain, if the invoice specifies `fallbacks`:
+    - MUST ignore any `fallback_address` for which `version` is greater than 16.
+    - MUST ignore any `fallback_address` for which `address` is less than 2 or greater than 40 bytes.
+    - MUST ignore any `fallback_address` for which `address` does not meet known requirements for the given `version`
 
 ## Rationale
 
