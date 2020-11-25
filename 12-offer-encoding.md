@@ -198,13 +198,13 @@ The human-readable prefix for offers is `lno`.
         * [`...*chain_hash`:`chains`]
     1. type: 6 (`currency`)
     2. data:
-        * [`...*byte`:`iso4217`]
+        * [`...*utf8`:`iso4217`]
     1. type: 8 (`amount`)
     2. data:
         * [`tu64`:`amount`]
     1. type: 10 (`description`)
     2. data:
-        * [`...*byte`:`description`]
+        * [`...*utf8`:`description`]
     1. type: 12 (`features`)
     2. data:
         * [`...*byte`:`features`]
@@ -216,7 +216,7 @@ The human-readable prefix for offers is `lno`.
         * [`...*blinded_path`:`paths`]
     1. type: 20 (`vendor`)
     2. data:
-        * [`...*byte`:`vendor`]
+        * [`...*utf8`:`vendor`]
     1. type: 22 (`quantity_min`)
     2. data:
         * [`tu64`:`min`]
@@ -383,7 +383,6 @@ A writer of an offer:
     - MUST set `sig` to the signature using `node_id` as described in [Signature Calculation](#signature-calculation).
   - MUST set `description` to a complete description of the purpose
     of the payment.
-  - MUST set `description` to a valid UTF-8 string.
   - if the chain for the invoice is not solely bitcoin:
     - MUST specify `chains` the offer is valid for.
   - otherwise:
@@ -411,7 +410,6 @@ A writer of an offer:
   - if it includes `paths`:
     - SHOULD ignore any invoice_request which does not use the path.
   - if it sets `vendor`:
-    - MUST set it to a valid UTF-8 string.
     - SHOULD set it to clearly identify the issuer of the invoice.
   - if it can supply more than one item for a single invoice
     - if the minimum quantity is more than 1:
@@ -683,7 +681,7 @@ using `onion_message` `invoice` field.
         * [`tu64`:`msat`]
     1. type: 10 (`description`)
     2. data:
-        * [`...*byte`:`description`]
+        * [`...*utf8`:`description`]
     1. type: 12 (`features`)
     2. data:
         * [`...*byte`:`features`]
@@ -695,7 +693,7 @@ using `onion_message` `invoice` field.
         * [`...*blinded_payinfo`:`payinfo`]
     1. type: 20 (`vendor`)
     2. data:
-        * [`...*byte`:`vendor`]
+        * [`...*utf8`:`vendor`]
     1. type: 30 (`node_id`)
     2. data:
         * [`pubkey32`:`node_id`]
@@ -935,12 +933,12 @@ field (via the onion `reply_path`) for either `invoice_request` or
         * [`...*byte`:`value`]
     1. type: 5 (`error`)
     2. data:
-        * [`...*byte`:`msg`]
+        * [`...*utf8`:`msg`]
 
 ## Requirements
 
 A writer of an invoice_error:
-  - MUST set `error` to a valid UTF-8 string.
+  - MUST set `error` to an explanatory string.
   - MAY set `erroneous_field` to a specific field number in the
     `invoice` or `invoice_request` which had a problem.
   - if it sets `erroneous_field`:
