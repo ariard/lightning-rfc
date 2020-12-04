@@ -776,14 +776,13 @@ A writer of an invoice:
   - if the invoice corresponds to an offer with `recurrence`:
     - MUST set `recurrence_basetime` to the start of period #0 as calculated
       by [Period Calculation](#offer-period-calculation).
-    - MUST set `relative_expiry` `seconds_from_timestamp` to the number of
-      seconds after `timestamp` that payment for this period will no longer be
-      accepted.
+    - if it sets `relative_expiry`:
+	  - MUST NOT set `relative_expiry` `seconds_from_timestamp` more than the number of seconds after `timestamp` that payment for this period will be accepted.
   - otherwise:
     - MUST not set `recurrence_basetime`.
-    - if the expiry for accepting payment is not 7200 seconds after `timestamp`:
-      - MUST set `relative_expiry` `seconds_from_timestamp` to the number of
-        seconds after `timestamp` that payment should not be attempted.
+  - if the expiry for accepting payment is not 7200 seconds after `timestamp`:
+    - MUST set `relative_expiry` `seconds_from_timestamp` to the number of
+      seconds after `timestamp` that payment of this invoice should not be attempted.
   - if the `min_final_cltv_expiry` for the last HTLC in the route is not 18:
     - MUST set `min_final_cltv_expiry`.
   - if it accepts onchain payments:
@@ -849,6 +848,10 @@ A reader of an invoice:
   - MUST reject the invoice if `description` is not present.
   - MUST reject the invoice if `timestamp` is not present.
   - MUST reject the invoice if `payment_hash` is not present.
+  - if `relative_expiry` is present:
+    - MUST reject the invoice if the current time since 1970-01-01 UTC is greater than `timestamp` plus `seconds_from_timestamp`.
+  - otherwise:
+    - MUST reject the invoice if the current time since 1970-01-01 UTC is greater than `timestamp` plus 7200.
   - if `blinded_path` is present:
     - MUST reject the invoice if `blinded_payinfo` is not present.
     - MUST reject the invoice if `blinded_payinfo` does not contain exactly as many `payinfo` as total `onionmsg_path` in `blinded_path`.
@@ -914,6 +917,13 @@ are correct.
 Note that the recipient of the invoice can determine the expected
 amount from either the offer it received, or the invoice_request it
 sent, so often already has authorization for the expected amount.
+
+It's natural to set the `relative_expiry` of an invoice for a
+recurring offer to the end of the payment window for the period, but
+if that is a long time and the offer was in another currency, it's
+common to cap this at some maximum duration.  For example, omitting it
+implies the default of 7200 seconds, which is generally a sufficient
+time for payment.
 
 # Invoice Errors
 
