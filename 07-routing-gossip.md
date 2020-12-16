@@ -1137,7 +1137,8 @@ parameter which allows decryption of the `enctlv` field inside the
 
 1. type: 385 (`onion_message`) (`option_onion_messages`)
 2. data:
-    * [`1366*byte`:`onionmsg`]
+    * [`u16`:`len`]
+    * [`len*byte`:`onionmsg`]
 	* [`onion_message_tlvs`:`onion_message_tlvs`]
 
 1. tlvs: `onion_message_tlvs`
@@ -1152,6 +1153,7 @@ The writer:
 - MUST populate the per-hop payloads as described in [BOLT 4](04-onion-routing.md#onion-messages).
 - SHOULD retry via a different route if it expects a response and
   doesn't receive one after a reasonable period.
+- SHOULD set `len` to 1366 or 32834.
 
 The reader:
 - MUST ignore any message which contains a `blinding` which it did not expect, or does not contain
@@ -1161,6 +1163,11 @@ The reader:
 - MAY rate-limit messages by dropping them.
 
 ## Rationale
+
+`len` allows larger messages to be sent than the standard 1300 bytes
+allowed for an HTLC onion, but this should be used sparingly as it is
+reduces anonymity set, hence the recommendation that it either look
+like an HTLC onion, or if larger, be a fixed size.
 
 `blinding` is critical to the use of blinded paths: there are various
 means by which a blinded path is passed to a node.  The receipt of an
