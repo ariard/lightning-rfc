@@ -550,7 +550,10 @@ The writer of an invoice_request:
     - MUST specify `amount`.`msat` in multiples of the minimum lightning-payable unit
       (e.g. milli-satoshis for bitcoin) for the first `chains` entry.
   - otherwise:
-    - MUST NOT set `amount`
+    - MAY omit `amount`.
+    - if it sets `amount`:
+      - MUST specify `amount`.`msat` as greater or equal to amount expected by the offer
+        (before any proportional period amount).
   - if the offer contained `recurrence`:
     - for the initial request:
       - MUST use a unique `payer_key`.
@@ -596,11 +599,14 @@ The reader of an invoice_request:
   - otherwise:
     - MUST fail the request if there is a `quantity` field.
   - if the offer included `amount`:
-    - MUST fail the request if it contains `amount`.
     - MUST calculate the *base invoice amount* using the offer `amount`:
       - if offer `currency` is not the invoice currency, convert to the
         invoice currency.
       - if request contains `quantity`, multiply by `quantity`.
+    - if the request contains `amount`:
+      - MUST fail the request if its `amount` is less than the *base invoice amount*.
+      - MAY fail the request if its `amount` is much greater than the *base invoice amount*.
+      - MUST use the request's `amount` as the *base invoice amount*.
   - otherwise:
     - MUST fail the request if it does not contain `amount`.
     - MUST use the request `amount` as the *base invoice amount*. (Note: invoice amount can be further modiifed by recurrence below)
@@ -658,6 +664,15 @@ no third party can determine how many invoices have been paid already.
 BIP-32 derivation path); a valid system might be for a node to maintain a base
 payer key, and encode a 128-bit tweak here.  The payer_key would be derived by
 tweaking the base key with SHA256(payer_base_pubkey || tweak).
+
+Users can give a tip (or obscure the amount sent) by specifying an
+`amount` in their invoice request, even though the offer specifies an
+`amount`.  Obviously this will only be accepted by the recipient if
+the invoice request amount exceeds the amount it's expecting (i.e. its
+`amount` after any currency conversion, multiplied by `quantity` if
+any).  Note that for recurring invoices with `proportional_amount`
+set, the `amount` in the invoice request will be scaled by the time in
+the period; the sender should not attempt to scale it.
 
 # Invoices
 
@@ -777,7 +792,7 @@ A writer of an invoice:
     - MUST set `recurrence_basetime` to the start of period #0 as calculated
       by [Period Calculation](#offer-period-calculation).
     - if it sets `relative_expiry`:
-	  - MUST NOT set `relative_expiry` `seconds_from_timestamp` more than the number of seconds after `timestamp` that payment for this period will be accepted.
+      - MUST NOT set `relative_expiry` `seconds_from_timestamp` more than the number of seconds after `timestamp` that payment for this period will be accepted.
   - otherwise:
     - MUST not set `recurrence_basetime`.
   - if the expiry for accepting payment is not 7200 seconds after `timestamp`:
